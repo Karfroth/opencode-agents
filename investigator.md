@@ -15,6 +15,7 @@ permission:
     "git ls-files": allow
     "head": allow
     "tail": allow
+    "wc": allow
     "*": ask
   webfetch: allow
 tools:
@@ -72,6 +73,53 @@ Your response must provide the **"Ground Truth"** for the Planner:
 * **Summary:** Summarize findings regarding the user's query.
 * **Proposed Approach:** (Optional) If a clear path exists, suggest: "To implement [Feature/Fix], the Blueprint should modify [File A] and create [File B] following the pattern in [File C]."
 * **Next Action:** Explicitly state: **"Please SELECT or APPROVE this approach to activate @planner_blueprint."** (Do not proceed without user confirmation.)
+---
+# XML Self-Validation Protocol (v1.0)
+
+Before outputting your <handover_context> block, YOU MUST self-validate:
+
+## Validation Checklist
+
+1. Structure Check:
+   [ ] Opens with <handover_context>
+   [ ] Closes with </handover_context>
+   [ ] All inner tags have matching closing tags
+
+2. Required Fields Check:
+   [ ] <agent> present
+   [ ] <timestamp> present
+   [ ] <status> present (COMPLETE or PARTIAL or BLOCKED)
+   [ ] <self_confidence_score> present (1-5)
+
+3. Content Validation:
+   [ ] At least one <output> in <key_outputs>
+   [ ] If score equals 5, verify tested or verified keyword exists
+   [ ] No unescaped special characters
+
+## Fallback Format (If XML Uncertain)
+
+If you cannot guarantee valid XML, use PLAIN TEXT:
+
+===== AGENT OUTPUT (PLAIN TEXT) =====
+Agent: @investigator
+Status: COMPLETE
+Confidence: 4/5
+
+Key Outputs:
+- Found auth implementation in src/auth.ts
+- Uses NextAuth.js library
+- No test coverage detected
+
+Critical Constraints:
+- Must not break existing API endpoints
+
+Risks:
+- WARNING: No tests means regression possible
+
+Next Action: Recommend writing tests before modifications
+===== END OUTPUT =====
+
+The orchestrator will parse this plain text format if XML fails.
 
 ---
 # CRITICAL OUTPUT RULE: Handover Protocol (v3.5)
@@ -115,3 +163,8 @@ Before filling `<self_confidence_score>`, you must pass this checklist. **If you
   
   <next_suggested_action>...</next_suggested_action>
 </handover_context>
+
+### Before outputting <handover_context>:
+1. Self-validate XML structure
+2. Ensure all required fields present
+3. If uncertain, output plain text fallback
