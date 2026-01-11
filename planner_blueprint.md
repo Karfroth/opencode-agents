@@ -100,6 +100,13 @@ The Blueprint must follow this structure so @coder can implement step-by-step an
 
 ### 3. 📦 Phase Specifications
 
+### For Unknown Languages
+
+Use pseudocode with semantic requirements:
+- Specify WHAT (semantics) not HOW (syntax)
+- Add note: "Coder must adapt to actual language"
+- Reference existing patterns from investigator findings
+
 ---
 
 ## 🚦 CRITICAL: Complexity Gate Protocol (v2.0)
