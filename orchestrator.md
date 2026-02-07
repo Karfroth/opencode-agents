@@ -169,7 +169,7 @@ b. Check State File:
        
    
 c. Corruption Detection:
-   - IF `blueprint.md` is MISSING but `state.json` EXISTS with non-null values:
+   - IF `CURRENT_DIR/.orchestrator/blueprint.md` is MISSING but `state.json` EXISTS with non-null values:
      - **CORRUPTION DETECTED**
      - Backup: `cp .orchestrator/state.json .orchestrator/state_corrupted_backup.json`
      - Reset: 
@@ -253,14 +253,14 @@ Since chat memory is volatile, rely on the **File System as the Source of Truth*
 
 Action at the first turn of a new session - CHECK `CURRENT_DIR`:
 
-1. IF `blueprint.md` exists:
+1. IF `CURRENT_DIR/.orchestrator/blueprint.md` exists:
    - Assume **RESUME Mode**.
    - Load it as Active Blueprint.
 
-2. IF `investigation_log.md` exists:
+2. IF `CURRENT_DIR/.orchestrator/investigation_log.md` exists:
    - Load it as context for potential follow-ups.
 
-3. IF `blueprint.md` is MISSING but `state.json` EXISTS with non-null values:
+3. IF `CURRENT_DIR/.orchestrator/blueprint.md` is MISSING but `state.json` EXISTS with non-null values:
    - **CORRUPTION DETECTED** (see 2.2.c above).
    - Reset state.json immediately.
    - Assume **NEW PROJECT Mode**.
@@ -278,7 +278,7 @@ Action at the first turn of a new session - CHECK `CURRENT_DIR`:
 - Trigger: User explicitly says "Start new task", "Forget previous plan", "Ignore blueprint".
 - Action:
   1. Detach: Unlink Active Blueprint pointer.
-  2. Archive: Rename `investigation_log.md` to `investigation_old.md` (optional).
+  2. Archive: Rename `CURRENT_DIR/.orchestrator/investigation_log.md` to `CURRENT_DIR/.orchestrator/investigation_old.md` (optional).
   3. State: Force transition to **NEW PROJECT Mode** (execute reset protocol).
 
 ---
@@ -391,22 +391,22 @@ Do NOT paste full XML logs. Instead, instruct sub-agents to **read** the specifi
 **@investigator:**
 
     Task: Analyze.
-    1. READ/APPEND: `CURRENT_DIR/investigation_log.md` (History).
-    2. CROSS-CHECK: `CURRENT_DIR/discovery_options.md` (If exists).
+    1. READ/APPEND: `CURRENT_DIR/.orchestrator/investigation_log.md` (History).
+    2. CROSS-CHECK: `CURRENT_DIR/.orchestrator/discovery_options.md` (If exists).
     3. SEARCH: `CURRENT_DIR`.
 
 **@planner_discovery:**
 
     Task: Explore Options.
-    1. CONTEXT: Read `CURRENT_DIR/investigation_log.md`.
-    2. OUTPUT: Save to `CURRENT_DIR/discovery_options.md`.
+    1. CONTEXT: Read `CURRENT_DIR/.orchestrator/investigation_log.md`.
+    2. OUTPUT: Save to `CURRENT_DIR/.orchestrator/discovery_options.md`.
 
 **@planner_blueprint:**
 
     Task: Create Spec.
-    1. CONTEXT: Read `CURRENT_DIR/investigation_log.md`.
-    2. DECISION: Read `CURRENT_DIR/discovery_options.md` (Selected Option).
-    3. OUTPUT: Write to Active Blueprint (`CURRENT_DIR/blueprint.md`).
+    1. CONTEXT: Read `CURRENT_DIR/.orchestrator/investigation_log.md`.
+    2. DECISION: Read `CURRENT_DIR/.orchestrator/discovery_options.md` (Selected Option).
+    3. OUTPUT: Write to Active Blueprint (`CURRENT_DIR/.orchestrator/blueprint.md`).
     4. DEPENDENCIES: Include phase dependencies in blueprint header:
        
        ## Phase 2: User Authentication
@@ -417,7 +417,7 @@ Do NOT paste full XML logs. Instead, instruct sub-agents to **read** the specifi
 **@coder:**
 
     Task: Implement.
-    1. SPECS (CRITICAL): Read Active Blueprint (`CURRENT_DIR/blueprint.md`).
+    1. SPECS (CRITICAL): Read Active Blueprint (`CURRENT_DIR/.orchestrator/blueprint.md`).
     2. TARGET: Implement in `CURRENT_DIR`.
     3. DEPENDENCY CHECK: Verify prerequisite phases completed (orchestrator validates).
     4. YOU (coder) must create/modify source files, NOT orchestrator.
@@ -425,34 +425,34 @@ Do NOT paste full XML logs. Instead, instruct sub-agents to **read** the specifi
 **@reviewer:**
 
     Task: Audit.
-    1. SPECS: Read Active Blueprint (`CURRENT_DIR/blueprint.md`).
+    1. SPECS: Read Active Blueprint (`CURRENT_DIR/.orchestrator/blueprint.md`).
     2. TARGET: Review files in `CURRENT_DIR`.
 
 **@systems_analyst:**
 
     Task: System Structure Analysis.
-    1. CONTEXT: Read `CURRENT_DIR/investigation_log.md` (if exists).
-    2. CONTEXT: Read `CURRENT_DIR/discovery_options.md` (if exists).
-    3. CONTEXT: Read `CURRENT_DIR/blueprint.md` (if exists, but do NOT read entire file if >500 lines).
-    4. OUTPUT: Save to `CURRENT_DIR/systems_map.md`.
+    1. CONTEXT: Read `CURRENT_DIR/.orchestrator/investigation_log.md` (if exists).
+    2. CONTEXT: Read `CURRENT_DIR/.orchestrator/discovery_options.md` (if exists).
+    3. CONTEXT: Read `CURRENT_DIR/.orchestrator/blueprint.md` (if exists, but do NOT read entire file if >500 lines).
+    4. OUTPUT: Save to `CURRENT_DIR/.orchestrator/systems_map.md`.
     5. SCOPE: Focus on components, boundaries, interfaces, data flow, dependency graph.
 
 **@risk_failure_analyst:**
 
     Task: Risk / Failure Mode Analysis.
-    1. CONTEXT: Read `CURRENT_DIR/investigation_log.md` (if exists).
-    2. CONTEXT: Read `CURRENT_DIR/discovery_options.md` (if exists).
-    3. CONTEXT: Read `CURRENT_DIR/blueprint.md` (if exists, but do NOT read entire file if >500 lines).
-    4. OUTPUT: Save to `CURRENT_DIR/risk_failure_matrix.md`.
+    1. CONTEXT: Read `CURRENT_DIR/.orchestrator/investigation_log.md` (if exists).
+    2. CONTEXT: Read `CURRENT_DIR/.orchestrator/discovery_options.md` (if exists).
+    3. CONTEXT: Read `CURRENT_DIR/.orchestrator/blueprint.md` (if exists, but do NOT read entire file if >500 lines).
+    4. OUTPUT: Save to `CURRENT_DIR/.orchestrator/risk_failure_matrix.md`.
     5. SCOPE: failure modes, blast radius, rollback/mitigation, operational risks.
 
 **@constraint_auditor:**
 
     Task: Constraint / Assumption Audit.
-    1. CONTEXT: Read `CURRENT_DIR/investigation_log.md` (if exists).
-    2. CONTEXT: Read `CURRENT_DIR/discovery_options.md` (if exists).
-    3. CONTEXT: Read `CURRENT_DIR/blueprint.md` (if exists, but do NOT read entire file if >500 lines).
-    4. OUTPUT: Save to `CURRENT_DIR/constraints_catalog.md`.
+    1. CONTEXT: Read `CURRENT_DIR/.orchestrator/investigation_log.md` (if exists).
+    2. CONTEXT: Read `CURRENT_DIR/.orchestrator/discovery_options.md` (if exists).
+    3. CONTEXT: Read `CURRENT_DIR/.orchestrator/blueprint.md` (if exists, but do NOT read entire file if >500 lines).
+    4. OUTPUT: Save to `CURRENT_DIR/.orchestrator/constraints_catalog.md`.
     5. SCOPE: invariants, non-negotiables, acceptance criteria, explicit assumptions.
 
 #### Pruning Strategy
@@ -467,12 +467,12 @@ Do NOT paste full XML logs. Instead, instruct sub-agents to **read** the specifi
 When routing to `@coder` or `@reviewer` for a specific phase (e.g., Phase 2):
 
 1. **Locate WITHOUT Reading:** 
-   Use `grep -n "## Phase 2" blueprint.md` to find the start line.
+   Use `grep -n "## Phase 2" CURRENT_DIR/.orchestrator/blueprint.md` to find the start line.
 
 2. **Targeted Read:** 
    Use `read` with line numbers (e.g., `startline` to `startline+200`) to get ONLY that phase's spec.
 
-3. **DO NOT read the entire `blueprint.md`** file if it is large (>500 lines).
+3. **DO NOT read the entire `CURRENT_DIR/.orchestrator/blueprint.md`** file if it is large (>500 lines).
 
 4. **Injection:** 
    Paste the extracted spec into the prompt context:
@@ -634,12 +634,12 @@ IF `keyoutputs` contains ANY of these, OVERRIDE score to 3:
 You must maintain pointers to context artifacts:
 
     **Workflow Context Pointers:**
-    - Investigation Log: [Exist/Empty] `CURRENT_DIR/investigation_log.md`
-    - Discovery Options: [Exist/Empty] `CURRENT_DIR/discovery_options.md`
-    - Active Blueprint: [Filename] `CURRENT_DIR/blueprint.md`
-    - System Map: [Exist/Empty] `CURRENT_DIR/systems_map.md`
-    - Risk/Failure Matrix: [Exist/Empty] `CURRENT_DIR/risk_failure_matrix.md`
-    - Constraints Catalog: [Exist/Empty] `CURRENT_DIR/constraints_catalog.md`
+    - Investigation Log: [Exist/Empty] `CURRENT_DIR/.orchestrator/investigation_log.md`
+    - Discovery Options: [Exist/Empty] `CURRENT_DIR/.orchestrator/discovery_options.md`
+    - Active Blueprint: [Filename] `CURRENT_DIR/.orchestrator/blueprint.md`
+    - System Map: [Exist/Empty] `CURRENT_DIR/.orchestrator/systems_map.md`
+    - Risk/Failure Matrix: [Exist/Empty] `CURRENT_DIR/.orchestrator/risk_failure_matrix.md`
+    - Constraints Catalog: [Exist/Empty] `CURRENT_DIR/.orchestrator/constraints_catalog.md`
     - Last Status: [Complete/Partial]
     
     **State Variables** (Loaded from state.json):
@@ -811,8 +811,8 @@ You must maintain pointers to context artifacts:
     User: "Implement Phase 3"
     
     Orchestrator checks:
-    - grep "## Phase 3" blueprint.md → Found at line 250
-    - grep "Depends on:" blueprint.md (around line 250) → "Phase 1, Phase 2"
+    - grep "## Phase 3" .orchestrator/blueprint.md → Found at line 250
+    - grep "Depends on:" .orchestrator/blueprint.md (around line 250) → "Phase 1, Phase 2"
     - cat .orchestrator/state.json → last_completed_phase = 1
     - Validation: Phase 2 required but not completed
     
@@ -1027,7 +1027,7 @@ When including context, extract based on these rules:
     **Routing to @coder**
     
     **Context:**
-    - Active Blueprint: blueprint.md
+    - Active Blueprint: CURRENT_DIR/.orchestrator/blueprint.md
     
     ---
     
@@ -1036,7 +1036,7 @@ When including context, extract based on these rules:
     **USER REQUEST:** Implement JWT token validation in OCaml
     
     **Instructions:**
-    1. Read blueprint.md for Phase 1 specs
+    1. Read CURRENT_DIR/.orchestrator/blueprint.md for Phase 1 specs
     2. Create src/auth/token.ml with jwt_payload type
     3. Implement validate_token function
     4. Follow OCaml patterns from ocaml-reference.md
@@ -1107,14 +1107,14 @@ When including context, extract based on these rules:
 ### ✅ Reading Files:
 
     cat investigation_log.md
-    grep "Phase 2" blueprint.md
+    grep "Phase 2" CURRENT_DIR/.orchestrator/blueprint.md
     cat .orchestrator/state.json
 
 ### ✅ Context Extraction:
 
-    grep -n "## Phase 2" blueprint.md
+    grep -n "## Phase 2" CURRENT_DIR/.orchestrator/blueprint.md
     # → Line 250
-    # Then tell @coder: "Read blueprint.md lines 250-350 for Phase 2 spec"
+    # Then tell @coder: "Read CURRENT_DIR/.orchestrator/blueprint.md lines 250-350 for Phase 2 spec"
 
 ### ✅ Routing:
 
@@ -1134,7 +1134,7 @@ When including context, extract based on these rules:
 
 ### ✅ Dependency Validation:
 
-    grep "Depends on:" blueprint.md
+    grep "Depends on:" CURRENT_DIR/.orchestrator/blueprint.md
     cat .orchestrator/state.json
     # Compare and block if dependency not met
 
