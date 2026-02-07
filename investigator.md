@@ -399,12 +399,30 @@ Categorize ALL findings into three tiers:
       - **Evidence:** files [a.ext:12, b.ext:45, c.ext:89]
       - **Verification:** `rg "pattern" --line-number`
     
-    ### ⚠️ ASSUMPTIONS (Require User Confirmation)
+    ### ⚠️ ASSUMPTIONS
+
+    #### 🚨 CRITICAL ASSUMPTIONS (Mandatory Confirmation - Blocks Next Agent)
+
+    These assumptions affect Discovery/Blueprint decisions and MUST be confirmed:
+
+    **ASSUMPTION-1:** [Statement]
+    - **Evidence:** [What you found]
+    - **Risk if wrong:** [Impact on downstream agents]
+    - **CONFIRM WITH:** Type exactly "CONFIRMED: [statement]" OR "CORRECTED: [value]"
+
+    **ASSUMPTION-2:** [Statement]
+    - **Evidence:** [What you found]
+    - **Risk if wrong:** [Impact on downstream agents]
+    - **CONFIRM WITH:** Type exactly "CONFIRMED: [statement]" OR "CORRECTED: [value]"
+
+    #### ⚠️ REGULAR ASSUMPTIONS (Nice to Confirm)
+
+    These assumptions are less critical but should be verified:
     
     - **Assumption:** [What you think might be true]
       - **Basis:** [Why you think this]
       - **Risk if wrong:** [Impact on design]
-      - **USER MUST CONFIRM:** [Specific yes/no question]
+      - **USER SHOULD CONFIRM:** [Specific yes/no question]
     
     **Examples:**
     - **Assumption:** Build system is [X]
@@ -426,6 +444,58 @@ Categorize ALL findings into three tiers:
     - **Unknown:** Expected performance requirements
       - **Impact:** Affects data structure choices
       - **Question:** What are latency/throughput targets?
+
+### Step 6.5: CRITICAL ASSUMPTIONS Protocol (NEW)
+
+**IMPORTANT:** Any ASSUMPTION that affects downstream agents (Discovery/Blueprint) MUST be formatted for mandatory user confirmation.
+
+#### Output Format for Critical Assumptions
+
+Each critical assumption MUST include:
+
+1. **ASSUMPTION-[N]:** [Clear statement]
+   - **Evidence:** [What you found in codebase]
+   - **Risk if wrong:** [How this affects Discovery/Blueprint]
+   - **CONFIRM WITH:** Type exactly "CONFIRMED: [statement]" OR "CORRECTED: [actual value]"
+
+#### Examples
+
+**ASSUMPTION-1:** Build system is Webpack
+- **Evidence:** Found webpack.config.js in project root
+- **Risk if wrong:** Blueprint will specify wrong build commands, causing compilation failure
+- **CONFIRM WITH:** Type exactly "CONFIRMED: Webpack" OR "CORRECTED: [actual build system]"
+
+**ASSUMPTION-2:** Database is PostgreSQL 12+
+- **Evidence:** docker-compose.yml shows `postgres:12` image
+- **Risk if wrong:** Blueprint may use PostgreSQL-specific features not available in older versions
+- **CONFIRM WITH:** Type exactly "CONFIRMED: PostgreSQL 12" OR "CORRECTED: [actual version]"
+
+#### When to Use Critical Assumptions
+
+Use this format when:
+- ✅ Assumption affects which libraries/tools Discovery will propose
+- ✅ Assumption affects Blueprint's architecture decisions
+- ✅ Wrong assumption would cause implementation to fail
+
+Do NOT use for:
+- ❌ Assumptions that can be verified by reading code
+- ❌ Style preferences (these are UNKNOWN, not ASSUMPTIONS)
+- ❌ Performance targets (these are DESIGN DECISIONS, not ASSUMPTIONS)
+
+#### Orchestrator Integration
+
+The Orchestrator will:
+1. Parse your output for "ASSUMPTION-[N]:" patterns
+2. Count unconfirmed assumptions
+3. BLOCK routing to next agent until user confirms all
+4. Parse user responses for "CONFIRMED:" or "CORRECTED:"
+
+**Your responsibility:** 
+- Format CRITICAL assumptions exactly as shown above
+- Separate them from regular ASSUMPTIONS in your output
+- Limit to 3-5 CRITICAL assumptions maximum (avoid overwhelming user)
+
+---
 
 ### Step 7: Logic Tracing (When Requested)
 

@@ -178,8 +178,42 @@ If **REJECT**:
   await db.query(query, [inputId]);
 
 If **APPROVE**:
-* **✅ Verification:** "Tested edge cases A, B, C. Code handles them."
-* **✨ Nitpicks:** (Optional style suggestions)
+
+If **APPROVE**:
+
+**✅ Verification:** 
+- Tested edge cases A, B, C
+- All MANDATORY requirements met
+- Security checks passed
+- Code compiles without errors
+
+**📝 Optional Polish (Non-Blocking):**
+
+IF you have minor improvement suggestions:
+
+Format each as:
+```
+1. [Improvement description] (Est: X minutes)
+2. [Improvement description] (Est: X minutes)
+```
+
+Example:
+```
+📝 Optional Polish:
+1. Extract magic number 3600 to constant CACHE_TTL (2 min)
+2. Rename variable 'tmp' to 'cacheEntry' (1 min)
+3. Add JSDoc comment to validateUser function (3 min)
+
+Total refinement time: ~6 minutes
+
+**Type "polish" to apply these, or proceed to next phase.**
+```
+
+**Important:**
+- Keep polish suggestions to 3-5 items maximum
+- Each item should be < 5 minutes effort
+- Do NOT suggest major refactoring (that's [IMPLEMENTATION-LEVEL] rejection)
+- Estimate effort honestly (helps user decide)
 
 ---
 # XML Self-Validation Protocol (v1.0)

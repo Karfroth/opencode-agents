@@ -168,8 +168,10 @@ Each approach MUST have:
     | Criterion | Assessment | Notes |
     |-----------|------------|-------|
     | **Language/Framework Support** | [✅ Available / ⚠️ Experimental / ❌ Missing / ❓ Unknown] | [Version requirements or "Unknown language"] |
+    | **Current System Compatibility** | [✅ Compatible / ❓ CHECK REQUIRED / ⚠️ ACTION REQUIRED / ❌ Blocked] | **NEW:** Does current codebase support this? |
     | **Team Expertise Required** | [Low / Medium / High / ❓ Unknown] | [Estimated learning curve] |
     | **External Dependencies** | [N libraries] OR [0 - stdlib only] | [List new deps OR "None needed"] |
+    | **Prerequisites** | [None / External Action Required] | **NEW:** Any setup needed before implementation? |
     | **Est. Implementation Time** | [X hours/days] | [For experienced team] |
     | **Est. Learning Curve** | [X hours/days] OR [0 - no new concepts] | [If new tech required] |
     | **Compile/Build-Time Safety** | [Strong / Medium / Weak / ❓ Unknown] | [Type system guarantees if known] |
@@ -189,6 +191,33 @@ Each approach MUST have:
     - [Documentation/training plan if learning required]
     
     **Recommendation Level:** [⭐ Recommended / ✅ Viable / ⚠️ High Risk / ❌ Not Recommended]
+
+**⚠️ Pre-Selection Checklist (if prerequisites exist):**
+
+IF this option requires external actions or verification:
+
+```markdown
+Before selecting this option, verify:
+- [ ] Current [system/tool] version (check [file/location])
+- [ ] [Prerequisite 1] available (confirm with [person/team])
+- [ ] Acceptable to invest [N] days for [external action]
+
+**If any checkbox fails:**
+- This option becomes HIGH RISK or NOT VIABLE
+- Consider alternative options
+```
+
+**Example:**
+```markdown
+⚠️ Pre-Selection Checklist:
+- [ ] Current Redis version ≥ 5.0 (check docker-compose.yml or package.json)
+- [ ] If Redis < 5.0: DevOps team can perform upgrade (est. 2 days)
+- [ ] Acceptable to have 2-day downtime for Redis upgrade
+
+**If Redis < 5.0 and upgrade not possible:**
+→ This option is ❌ NOT VIABLE
+→ Select Option B (in-memory cache) instead
+```
 
 **Provide at least 2 viable options, ideally 3.**
 

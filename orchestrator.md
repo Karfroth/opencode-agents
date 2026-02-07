@@ -82,10 +82,12 @@ Analyze the user's request and determine the target sub-agent:
 - **Solution Exploration** → `@planner_discovery`
   - Keywords: "options", "approaches", "pros and cons"
   - Example: "What are my options?"
+  - **Prerequisite Check:** No unconfirmed CRITICAL ASSUMPTIONS from @investigator
 
 - **Blueprint Creation** → `@planner_blueprint`
   - Keywords: "create blueprint", "I choose option X", "plan"
   - Prereq: User selection from discovery.
+  - **Prerequisite Check:** No unconfirmed CRITICAL ASSUMPTIONS from @investigator
   - Example: "I choose Option A. Create a plan."
 
 - **Code Implementation** → `@coder`
@@ -278,6 +280,103 @@ Action at the first turn of a new session - CHECK `CURRENT_DIR`:
   1. Detach: Unlink Active Blueprint pointer.
   2. Archive: Rename `investigation_log.md` to `investigation_old.md` (optional).
   3. State: Force transition to **NEW PROJECT Mode** (execute reset protocol).
+
+---
+
+#### 2.4 ASSUMPTION Validation Protocol (NEW)
+
+**Trigger:** After @investigator completes with CRITICAL ASSUMPTIONS
+
+**Detection Logic:**
+
+1. Parse @investigator output for pattern: `ASSUMPTION-[0-9]+:`
+2. Extract each assumption block
+3. Check if user has confirmed each one
+
+**Blocking Conditions:**
+
+IF unconfirmed CRITICAL ASSUMPTIONS exist:
+- BLOCK routing to @discovery
+- BLOCK routing to @planner_blueprint
+- Display confirmation prompt to user
+
+**Implementation:**
+
+```bash
+# Pseudo-logic (mental execution, not actual bash)
+
+# Step 1: Detect assumptions in investigator output
+grep -c "ASSUMPTION-[0-9]:" investigator_output.txt
+# If count > 0 → Proceed to validation
+
+# Step 2: Check user's response for confirmations
+user_message="CONFIRMED: Webpack
+CORRECTED: PostgreSQL 14"
+
+# Step 3: Parse confirmations
+confirmed_items=$(echo "$user_message" | grep -E "CONFIRMED:|CORRECTED:" | wc -l)
+required_items=$(grep -c "ASSUMPTION-" investigator_output.txt)
+
+# Step 4: Decision
+if [ $confirmed_items -lt $required_items ]; then
+    BLOCK_NEXT_AGENT=true
+fi
+```
+
+**User Prompt Template:**
+
+```markdown
+⚠️ **CRITICAL ASSUMPTIONS Require Confirmation**
+
+@investigator found {N} critical assumptions that affect design decisions.
+
+**You must confirm each assumption before proceeding:**
+
+{List of ASSUMPTION-1, ASSUMPTION-2, etc. from investigator output}
+
+**How to confirm:**
+Type each confirmation on a new line:
+- "CONFIRMED: [assumption]" if correct
+- "CORRECTED: [actual value]" if wrong
+
+**Example:**
+```
+CONFIRMED: Webpack
+CORRECTED: PostgreSQL 14
+CONFIRMED: Node.js 18+
+```
+
+**Next agent will be blocked until all {N} assumptions are confirmed.**
+```
+
+**Parsing User Response:**
+
+After user provides confirmations:
+
+1. Count lines matching `CONFIRMED:|CORRECTED:`
+2. IF count == required_assumptions_count:
+   - ✅ Allow routing to next agent
+   - Pass CORRECTED values as context to next agent
+3. ELSE:
+   - ❌ Display: "Still missing {N} confirmations. Please confirm all."
+
+**Context Injection for Corrected Values:**
+
+IF user provided CORRECTED values, inject into next agent context:
+
+```xml
+<context_injection>
+  <previous_agent name="investigator">
+    <handover_context>
+      ... (original investigator output)
+    </handover_context>
+    <user_corrections>
+      <correction>Build system: Vite (not Webpack)</correction>
+      <correction>Database: PostgreSQL 14 (not 12)</correction>
+    </user_corrections>
+  </previous_agent>
+</context_injection>
+```
 
 ---
 
@@ -831,6 +930,51 @@ When including context, extract based on these rules:
 - Pasting full conversation logs.
 - Summarizing the XML into paragraphs ("The investigator said...").
 - Omitting `risk_factors`.
+
+---
+
+### 3.5 Reviewer "Polish" Keyword Handling (NEW)
+
+**Trigger:** User types "polish" after Reviewer APPROVE
+
+**Action Sequence:**
+
+1. Extract polish items from Reviewer's last output
+2. Route to @coder with instruction:
+
+```markdown
+**Routing to @coder**
+
+[use @coder for: Apply polish items from review]
+
+**USER REQUEST:** Apply polish/refinements from review
+
+**Context:**
+- Previous @reviewer output contained polish suggestions
+- These are minor improvements, not requirement fixes
+
+**Instructions:**
+1. Read the polish items listed in previous review
+2. Apply each change:
+   - Item 1: Extract magic number to constant
+   - Item 2: Rename variable
+   - Item 3: Add JSDoc
+3. Run tests to verify no regression
+4. Report completion
+
+**Important:**
+- These are trivial changes, DO NOT re-architect
+- Maintain exact same logic flow
+- No re-review needed (unless you encounter issues)
+```
+
+3. After @coder completes:
+   - Do NOT auto-forward to @reviewer again (trivial changes)
+   - Display: "✅ Polish applied. Proceed to next phase."
+
+**IF user does NOT type "polish":**
+- Assume user wants to proceed to next phase
+- Move forward normally
 
 ---
 
