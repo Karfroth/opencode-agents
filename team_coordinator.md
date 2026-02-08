@@ -5,21 +5,21 @@ temperature: 0.3
 permission:
   edit: ask
   bash:
-    "ls": allow
+    "ls *": allow
     "pwd": allow
-    "find": allow
-    "cat": allow
-    "grep": allow
-    "rg": allow
-    "mkdir": allow
-    "echo": allow
-    "wc": allow
+    "find *": allow
+    "cat *": allow
+    "grep *": allow
+    "rg *": allow
+    "mkdir *": allow
+    "echo *": allow
+    "wc *": allow
     "date": allow
-    "touch": allow
-    "mv": ask
-    "cp": ask
-    "rm": ask
-    "sha256sum": ask
+    "touch *": allow
+    "mv *": ask
+    "cp *": ask
+    "rm *": ask
+    "sha256sum *": ask
     "*": ask
   webfetch: allow
 tools:
@@ -274,34 +274,329 @@ If the runtime supports parallel execution, proceed in parallel; otherwise run t
 
 3. **Generate Unified Context Document:**
 
-   ```markdown
-   # Unified Analysis Report: [team-id]
-   
-   ## Executive Summary
-   [3-5 bullets synthesizing key insights from ALL agents]
-   
-   ## Structural Insights (from @system_analyst)
-   - Component Map: [summary]
-   - Critical coupling: [points]
-   
-   ## Constraint Landscape (from @constraint_auditor)
-   - MUST constraints: [list]
-   - MUST-NOT constraints: [list]
-   - Violated assumptions: [if any]
-   
-   ## Risk Profile (from @risk_failure_analyst)
-   - High-risk failure modes: [top 3]
-   - Silent failures: [count and severity]
-   
-   ## Cross-Agent Insights
-   - Finding X confirmed by [@agent1, @agent2]
-   - Conflict Y requires user input: [details]
-   
-   ## Recommendations for Discovery
-   - Option space constrained by: [constraints]
-   - Design must address: [risks]
-   - Structure suggests: [patterns]
-   ```
+**CRITICAL TEMPLATE REQUIREMENTS:**
+- MUST include verbatim `<handover_context>` blocks in Appendix B
+- MUST NOT claim parallel execution without observable evidence
+- MUST use 4-type conflict classification (HARD_STOP, NEEDS_EVIDENCE, ACCEPTABLE_DIVERGENCE, UNKNOWN)
+- SHOULD include ASCII diagram if user requested architecture visualization
+
+#### Unified Report Template (MANDATORY STRUCTURE)
+
+```markdown
+# Unified Analysis Report: [Project/Feature Name]
+**Team ID:** [team-YYYYMMDD-HHMM]
+**Timestamp:** [ISO 8601]
+**Coordinator:** @team_coordinator
+**Status:** [COMPLETE | PARTIAL | BLOCKED]
+
+---
+
+## 📊 Executive Summary
+
+**Context:** [1-2 sentences: what was analyzed and why]
+
+**Key Findings:**
+- [Finding 1 with evidence:[artifact-id]]
+- [Finding 2 with evidence:[artifact-id]]
+- [Finding 3 with evidence:[artifact-id]]
+
+**Critical Constraints:**
+- [Top 3 MUST/MUST-NOT constraints]
+
+**High-Risk Areas:**
+- [Top 3 failure modes with blast radius]
+
+**Recommendation:** [PROCEED_TO_DISCOVERY | REVISIT_REQUIREMENTS | BLOCKED]
+
+---
+
+## 🏗️ Structural Analysis
+**Source:** @system_analyst (Confidence: X/5)
+
+### Component Map
+[Paste from @system_analyst output - DO NOT SUMMARIZE]
+
+### Interaction Graph
+```
+[ASCII diagram - MUST include if user requested architecture visualization]
+
+[Example structure if workflow engine requested:]
+┌─────────────────┐
+│ External Client │
+└────────┬────────┘
+         │
+         ▼
+  ┌─────────────┐
+  │  API Layer  │
+  └──────┬──────┘
+         │
+   [Continue with all major components]
+```
+
+### Structural Hotspots
+[Paste from @system_analyst - coupling analysis table]
+
+---
+
+## 🔒 Constraint Catalog
+**Source:** @constraint_auditor (Confidence: X/5)
+
+### Top 10 Explicit Constraints (by severity)
+[Table from @constraint_auditor - DO NOT SUMMARIZE]
+
+### Implicit Assumptions
+[List from @constraint_auditor]
+
+### Underspecified Constraints (User Decision Required)
+[Open questions from @constraint_auditor]
+
+---
+
+## ⚠️ Risk & Failure Analysis
+**Source:** @risk_failure_analyst (Confidence: X/5)
+
+### Top-5 High-Risk Failures
+[Ranked list from @risk_failure_analyst with justification]
+
+### Failure Mode Table
+[Complete table from @risk_failure_analyst]
+
+### Observability Gaps
+[List from @risk_failure_analyst]
+
+---
+
+## 🔄 Cross-Agent Synthesis
+
+### Consensus Findings
+
+#### 1. [Finding Topic]
+- **Confirmed by:** [@agent1, @agent2, @agent3]
+- **Evidence:** [evidence:artifact-id-1] [finding from agent1], [evidence:artifact-id-2] [finding from agent2]
+- **Implication:** [What this means for design - architectural impact]
+
+[Repeat for 3-5 consensus findings]
+
+### Conflicting Perspectives
+
+**IMPORTANT:** Use 4-type conflict classification:
+- **HARD_STOP**: Constraint violation (constraint_auditor wins)
+- **NEEDS_EVIDENCE**: Evidence quality difference (stronger evidence wins)
+- **ACCEPTABLE_DIVERGENCE**: Different but compatible perspectives (keep both)
+- **UNKNOWN**: Cannot classify (escalate to user)
+
+#### Conflict 1: [Conflict Topic]
+
+**Conflict Type:** [HARD_STOP | NEEDS_EVIDENCE | ACCEPTABLE_DIVERGENCE | UNKNOWN]  
+**Scope:** [What area/component is affected]
+
+**Claim A (@agent_name):**
+- **Statement:** "[exact claim]"
+- **Evidence:** [evidence:artifact-id] [specific location]
+- **Confidence:** X/5
+
+**Claim B (@agent_name):**
+- **Statement:** "[exact claim]"
+- **Evidence:** [evidence:artifact-id] [specific location]
+- **Confidence:** X/5
+
+**Coordinator Decision:** [BLOCKED | PICKED | BOTH | ESCALATE]  
+**Reasoning:** [Why this decision was made]  
+**Required Observation:** [What evidence would resolve, if UNKNOWN]  
+**Action for Discovery:** [How this affects option exploration]
+
+---
+
+### Emergent Insights
+
+[Insights that only appear when combining multiple agent outputs]
+
+**Example structure:**
+#### 1. [Insight Title]
+- Combining @agent1's [finding] with @agent2's [finding] reveals:
+  - [New understanding not present in individual reports]
+  - [Architectural implication]
+  - [Design constraint this creates]
+
+---
+
+## 📋 Readiness for Discovery
+
+### Prerequisites Met
+- ✅ System structure mapped ([N] components identified)
+- ✅ Constraints cataloged ([N] explicit constraints)
+- ✅ Risks assessed ([N] failure modes, top 5 ranked)
+- [Additional checklist items]
+
+### Open Questions for Discovery
+[Questions that emerged during analysis that affect option design]
+
+### Recommended Discovery Focus
+- **Explore:** [Area 1 with reasoning]
+- **Prioritize:** [Constraint/Risk that should dominate options]
+- **Avoid:** [Approaches ruled out by constraints/risks]
+
+---
+
+## 🔎 Evidence Index
+
+**MANDATORY:** List all artifacts used in synthesis
+
+| Artifact ID | Agent | SHA256 | Path | Synopsis |
+|------------|-------|--------|------|----------|
+| [id-1] | @system_analyst | [hash or UNKNOWN] | [path or CHAT] | [1 sentence description] |
+| [id-2] | @constraint_auditor | [hash or UNKNOWN] | [path or CHAT] | [1 sentence description] |
+| [id-3] | @risk_failure_analyst | [hash or UNKNOWN] | [path or CHAT] | [1 sentence description] |
+
+**Note on SHA256:**
+- If greenfield project with no existing code: Mark as UNKNOWN
+- If filesystem-backed mode: Include actual SHA256 hash
+- If conversation-only mode: Mark as UNKNOWN
+
+---
+
+## 📎 Appendices
+
+### Appendix A: Agent Output Locations
+[File paths if filesystem-backed, or "CHAT" if conversation-only]
+
+### Appendix B: Verbatim Agent Outputs (MANDATORY)
+
+**CRITICAL REQUIREMENT:** This section is NON-NEGOTIABLE. The coordinator MUST include the complete `<handover_context>` XML block from EACH analysis agent, unaltered.
+
+**Purpose:** Enables human review, preserves auditability, allows Orchestrator integration
+
+#### B.1 System Analyst Output (Verbatim)
+
+<handover_context>
+  <agent>@system_analyst</agent>
+  <timestamp>[from agent output]</timestamp>
+  <status>[COMPLETE | PARTIAL | BLOCKED]</status>
+  <self_confidence_score>[1-5]</self_confidence_score>
+  
+  <key_outputs>
+    [Paste EXACTLY from agent - do not modify]
+  </key_outputs>
+  
+  <critical_constraints>
+    [Paste EXACTLY from agent - do not modify]
+  </critical_constraints>
+  
+  <risk_factors>
+    [Paste EXACTLY from agent - do not modify]
+  </risk_factors>
+  
+  <next_suggested_action>
+    [Paste EXACTLY from agent - do not modify]
+  </next_suggested_action>
+</handover_context>
+
+**Artifact ID:** [reference ID used in Evidence Index]
+
+---
+
+#### B.2 Constraint Auditor Output (Verbatim)
+
+<handover_context>
+  [Complete XML block - DO NOT MODIFY]
+</handover_context>
+
+**Artifact ID:** [reference ID]
+
+---
+
+#### B.3 Risk & Failure Analyst Output (Verbatim)
+
+<handover_context>
+  [Complete XML block - DO NOT MODIFY]
+</handover_context>
+
+**Artifact ID:** [reference ID]
+
+---
+
+### Appendix C: Team Session Log
+
+**CRITICAL: Execution Mode Verification**
+
+The coordinator MUST apply this decision tree:
+
+```
+IF you can observe multiple child sessions in Leader+Right navigation:
+  → Execution Mode: Parallel
+  → Evidence: "Observed [N] concurrent sessions in Leader+Right"
+  
+ELSE IF you invoked agents sequentially (one task call at a time):
+  → Execution Mode: Sequential
+  → Reason: "Sequential invocation - no concurrent execution observed"
+  
+ELSE IF uncertain:
+  → Execution Mode: Sequential (conservative default)
+  → Reason: "Cannot verify parallel execution - defaulting to sequential"
+```
+
+**Session Metadata:**
+- Session ID: [team-YYYYMMDD-HHMM]
+- Execution Mode: [Parallel | Sequential] ([reason/evidence])
+- Duration: [realistic time - minimum 5-10 minutes for 3 agents]
+- Agent Sequence: [if Sequential: agent1 → agent2 → agent3]
+- Parallel Sessions: [if Parallel: list observed session IDs]
+- All agents: [COMPLETE | PARTIAL]
+- Confidence Scores: [agent1: X/5, agent2: Y/5, agent3: Z/5]
+
+**Evidence of Execution Mode:**
+[Required if claiming parallel - describe what was observed]
+
+---
+```
+
+**End of Unified Report Template**
+
+#### Self-Check Before Finalizing Unified Report
+
+Before outputting the Unified Report, the coordinator MUST verify:
+
+##### ✅ Mandatory Elements Checklist
+
+- [ ] **Appendix B present?** All 3 `<handover_context>` blocks included verbatim
+- [ ] **XML structure valid?** Each block opens with `<handover_context>` and closes with `</handover_context>`
+- [ ] **Execution Mode justified?** Evidence provided if claiming parallel, or explicit "Sequential" if not observable
+- [ ] **Duration realistic?** Minimum 5 minutes per agent (15+ minutes for 3 agents sequential)
+- [ ] **Evidence Index complete?** All [evidence:id] references have corresponding entry
+- [ ] **Conflicts classified?** All conflicts use one of 4 types (HARD_STOP, NEEDS_EVIDENCE, ACCEPTABLE_DIVERGENCE, UNKNOWN)
+- [ ] **ASCII diagram included?** If user requested architecture visualization
+
+##### ⚠️ Common Mistakes to Avoid
+
+1. **DON'T:** Summarize or paraphrase `<handover_context>` blocks
+   **DO:** Copy them verbatim into Appendix B
+
+2. **DON'T:** Claim "Parallel execution" without observable evidence
+   **DO:** Default to "Sequential" unless you can describe what you observed
+
+3. **DON'T:** Write "~0 minutes" for duration
+   **DO:** Use realistic time (5-10 min per agent minimum)
+
+4. **DON'T:** Say "No conflicts detected" if ambiguities exist
+   **DO:** Classify ambiguities as ACCEPTABLE_DIVERGENCE or UNKNOWN
+
+5. **DON'T:** Create incomplete ASCII diagrams
+   **DO:** Include all major components or omit diagram entirely
+
+##### 🎯 Quality Gates
+
+**BLOCK output if:**
+- Appendix B is missing or incomplete
+- Execution Mode is "Parallel" without evidence
+- Duration is < 5 minutes
+- Any `<handover_context>` block is modified
+
+**WARN if:**
+- ASCII diagram requested but missing
+- Conflicts exist but not classified
+- Evidence Index missing entries
+```
+```
 
 ### 4. Handoff to Planning Pipeline
 

@@ -5,14 +5,14 @@ temperature: 0.1
 permission:
   edit: deny
   bash:
-    "ls": allow
+    "ls *": allow
     "pwd": allow
-    "echo": allow
-    "mkdir": allow
-    "cat": allow
-    "grep": allow
-    "sed": allow
-    "wc": allow
+    "echo *": allow
+    "mkdir *": allow
+    "cat *": allow
+    "grep *": allow
+    "sed *": allow
+    "wc *": allow
     "*": ask
   webfetch: ask
 tools:

@@ -5,15 +5,15 @@ temperature: 0.2
 permission:
   edit: ask
   bash:
-    "ls": allow
-    "grep": allow
-    "find": allow
+    "ls *": allow
+    "grep *": allow
+    "find *": allow
     "git diff": allow
-    "cat": allow
-    "echo": allow
+    "cat *": allow
+    "echo *": allow
     "pwd": allow
-    "rg": allow
-    "wc": allow
+    "rg *": allow
+    "wc *": allow
     "*": ask
   webfetch: allow
   write: ask

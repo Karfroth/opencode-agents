@@ -8,17 +8,17 @@ permission:
     "git diff": allow
     "git log*": allow
     "make": allow
-    "grep": allow
-    "find": allow
-    "dune": allow
-    "cd": allow
-    "ls": allow
-    "tail": allow
-    "echo": allow
-    "head": allow
+    "grep *": allow
+    "find *": allow
+    "dune *": allow
+    "cd *": allow
+    "ls *": allow
+    "tail *": allow
+    "echo *": allow
+    "head *": allow
     "pwd": allow
-    "rg": allow
-    "wc": allow
+    "rg *": allow
+    "wc *": allow
     "*": ask
   webfetch: allow
 tools:

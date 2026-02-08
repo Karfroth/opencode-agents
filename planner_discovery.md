@@ -5,15 +5,15 @@ temperature: 0.7
 permission:
   edit: deny
   bash:
-    "ls": allow
-    "grep": allow
-    "find": allow
-    "echo": allow
+    "ls *": allow
+    "grep *": allow
+    "find *": allow
+    "echo *": allow
     "pwd": allow
-    "rg": allow
-    "cat": allow
+    "rg *": allow
+    "cat *": allow
     "git ls-files": allow
-    "wc": allow
+    "wc *": allow
     "*": ask
   webfetch: allow
 tools:
