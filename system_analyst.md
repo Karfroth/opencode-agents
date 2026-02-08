@@ -124,7 +124,7 @@ Identify structural pain points without telling how to fix them:
 Append at end:
 
 <handover_context>
-  <agent>@systems_analyst</agent>
+  <agent>@system_analyst</agent>
   <timestamp>[Current Time]</timestamp>
   <status>[COMPLETE | PARTIAL | BLOCKED]</status>
   <self_confidence_score>[1-5]</self_confidence_score>

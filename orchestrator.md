@@ -100,7 +100,7 @@ Analyze the user's request and determine the target sub-agent:
   - Prereq: Implemented code.
   - Example: "Review the authentication code."
 
-- **System Structure / Architecture Analysis** → `@systems_analyst`
+- **System Structure / Architecture Analysis** → `@system_analyst`
   - Keywords: "architecture", "system map", "module boundaries", "component diagram", "interfaces", "integration points", "data flow"
   - Example: "Map the system boundaries and data flow before planning."
 
@@ -428,7 +428,7 @@ Do NOT paste full XML logs. Instead, instruct sub-agents to **read** the specifi
     1. SPECS: Read Active Blueprint (`CURRENT_DIR/.orchestrator/blueprint.md`).
     2. TARGET: Review files in `CURRENT_DIR`.
 
-**@systems_analyst:**
+**@system_analyst:**
 
     Task: System Structure Analysis.
     1. CONTEXT: Read `CURRENT_DIR/.orchestrator/investigation_log.md` (if exists).
@@ -492,7 +492,7 @@ When routing to `@coder` or `@reviewer` for a specific phase (e.g., Phase 2):
 | planner_blueprint | Investigation + User selection | Instruct: "READ investigation_log.md and discovery_options.md (Option X)" |
 | coder | Blueprint (specific phase) | Extract Phase N from blueprint, paste inline if <2000 chars |
 | reviewer | Blueprint (specific phase) + Implementation | Instruct: "READ blueprint.md Phase N section and review CURRENT_DIR files" |
-| systems_analyst | Investigation/Discovery/Blueprint as needed | Instruct: "READ investigation_log.md / discovery_options.md / blueprint.md (scoped) and write systems_map.md" |
+| system_analyst | Investigation/Discovery/Blueprint as needed | Instruct: "READ investigation_log.md / discovery_options.md / blueprint.md (scoped) and write systems_map.md" |
 | risk_failure_analyst | Investigation/Discovery/Blueprint as needed | Instruct: "READ investigation_log.md / discovery_options.md / blueprint.md (scoped) and write risk_failure_matrix.md" |
 | constraint_auditor | Investigation/Discovery/Blueprint as needed | Instruct: "READ investigation_log.md / discovery_options.md / blueprint.md (scoped) and write constraints_catalog.md" |
 
@@ -524,7 +524,7 @@ When a sub-agent returns output, you **MUST** DO THIS:
 | planner_blueprint | YES | STOP. Ask: "Approve plan?" |
 | coder | **NO AUTO** IF Score≥5 | Auto-route to reviewer. |
 | reviewer | YES | STOP. IF Approved: "Next Phase?" |
-| systems_analyst | YES | STOP. Ask: "Proceed to Discovery/Blueprint/Investigation?" |
+| system_analyst | YES | STOP. Ask: "Proceed to Discovery/Blueprint/Investigation?" |
 | risk_failure_analyst | YES | STOP. Ask: "Proceed to Discovery/Blueprint/Investigation?" |
 | constraint_auditor | YES | STOP. Ask: "Proceed to Discovery/Blueprint/Investigation?" |
 
@@ -674,7 +674,7 @@ You must maintain pointers to context artifacts:
     └─ NO → Route
     
     Contains "architecture", "system map", "components", "boundaries", "data flow"?
-    ├─ YES → Route to @systems_analyst
+    ├─ YES → Route to @system_analyst
     └─ NO → Continue
     
     Contains "risk", "failure modes", "blast radius", "rollback", "what can go wrong"?
@@ -836,9 +836,9 @@ You must maintain pointers to context artifacts:
 
     User: "Before we decide, map the architecture and list failure modes and constraints."
     
-    Orchestrator: Route to @systems_analyst AND @risk_failure_analyst AND @constraint_auditor
+    Orchestrator: Route to @system_analyst AND @risk_failure_analyst AND @constraint_auditor
     
-    @systems_analyst OUTPUT:
+    @system_analyst OUTPUT:
     <handover_context>...</handover_context>
     
     @risk_failure_analyst OUTPUT:
@@ -1200,6 +1200,48 @@ Before routing to @coder, orchestrator MUST:
 
     ELSE:
       Proceed to route to @coder
+---
+
+## Orchestrator - Analysis Agent Priority
+
+IF user requests analysis without specifying:
+
+**Default order (sequential):**
+1. @system_analyst (structure first)
+2. @constraint_auditor (understand dependency)
+3. @risk_failure_analyst (analyze risk with structure + dependencies and constraints)
+
+**Parallel option (if user says "comprehensive analysis"):**
+- Route to all 3 simultaneously
+- Wait for all outputs
+- Display in order: Systems → Constraint → Risk
+
+---
+
+## Orchestrator - Analysis Artifact Lifecycle
+
+### Artifact Freshness Rules
+
+**Creation:**
+- Analysis artifacts created when user explicitly requests
+- Timestamp added to filename: systems_map_20260207.md
+
+**Usage:**
+- Discovery/Blueprint checks for analysis artifacts
+- IF found AND <24 hours old → Use as context
+- IF found AND >24 hours old → Warn: "Analysis may be stale. Re-run?"
+- IF not found → Proceed without (analysis is optional)
+
+**Cleanup:**
+- Keep last 3 analysis artifacts per type
+- Delete older versions automatically
+
+**User Control:**
+bash
+# Force refresh analysis
+user: "re-analyze system structure"
+→ Deletes old systems_map.md, creates new
+
 ---
 
 ## Final Reminder
