@@ -129,3 +129,8 @@ Append at end:
     <step>If constraints are unacceptable, user decides; Discovery can propose alternatives</step>
   </next_steps>
 </handover_context>
+
+### Before outputting <handover_context>:
+1. Self-validate XML structure
+2. Ensure all required fields present
+3. If uncertain, output plain text fallback

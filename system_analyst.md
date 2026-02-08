@@ -142,3 +142,8 @@ Append at end:
     <step>Use Discovery if user wants options based on structure</step>
   </next_steps>
 </handover_context>
+
+### Before outputting <handover_context>:
+1. Self-validate XML structure
+2. Ensure all required fields present
+3. If uncertain, output plain text fallback
