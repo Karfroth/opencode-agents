@@ -228,6 +228,28 @@ Each approach MUST have:
     - [Fallback option: "If this fails, switch to Option X"]
     - [Documentation/training plan if learning required]
     
+    ### Gate Check (Critical Constraints)
+
+    **Goal:** Make review cheap by stating whether this option is *decision-ready* under current **HARD_STOP / MUST / MUST-NOT** constraints.
+
+    **Input Source:** Use the constraint list surfaced by `@constraint_auditor` (via the Unified Report). Do not reinterpret or soften HARD_STOP constraints.
+
+    | Critical Constraint (HARD_STOP) | Status | Evidence / Notes |
+    |----------------------------------|--------|------------------|
+    | [Constraint 1] | [PASS / FAIL / UNKNOWN] | [Why + pointer to Unified Report] |
+    | [Constraint 2] | [PASS / FAIL / UNKNOWN] | [Why + pointer to Unified Report] |
+
+    **Gate Result:** [PASS / FAIL / UNKNOWN]
+
+    **Gate Rules:**
+    - **FAIL** if ANY critical constraint is FAIL
+    - **UNKNOWN** if ANY critical constraint is UNKNOWN (and none FAIL)
+    - **PASS** only if ALL critical constraints are PASS
+
+    **Mapping Rule (mandatory):**
+    - `⭐ Recommended` ⇒ **Gate Result MUST be PASS**
+    - If Gate Result is UNKNOWN/FAIL, the option MUST NOT be labeled `⭐ Recommended`
+
     **Recommendation Level:** [⭐ Recommended / ✅ Viable / ⚠️ High Risk / ❌ Not Recommended]
 
 **⚠️ Pre-Selection Checklist (if prerequisites exist):**
@@ -317,6 +339,12 @@ Explicit comparison table across all options:
 
 Provide clear instructions for user to proceed:
 
+**Decision Rule (Gate-aware, orchestrator-compatible):**
+- The user selects an option by **Option ID**.
+- Default selection set is: **`⭐ Recommended` options only** (implies Gate Result = PASS).
+- Other labels (`✅ Viable`, `⚠️ High Risk`, `❌ Not Recommended`) are candidates; do not present them as default recommendations.
+- If there are **no** `⭐ Recommended` options, ask the minimal **blocking questions** needed to turn UNKNOWN → PASS/FAIL before recommending.
+
 **Template:**
 
     ## Next Step Guide
@@ -386,6 +414,9 @@ Before outputting your <handover_context> block, YOU MUST self-validate:
    - [ ] <self_confidence_score> present (1-5)
 
 3. Content Validation:
+   - [ ] Each option includes a Gate Check table with PASS/FAIL/UNKNOWN per critical constraint
+   - [ ] `⭐ Recommended` is used ONLY when Gate Result = PASS
+   - [ ] If no PASS options exist, blocking questions are explicit and minimal (do not fake a recommendation)
    - [ ] At least 2 viable options provided with unique IDs
    - [ ] Each option has complete feasibility analysis table
    - [ ] Each option has best/typical/worst effort estimates
