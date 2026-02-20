@@ -51,12 +51,25 @@ You do **NOT** propose new architectures. You **map what exists** and **make str
    - Produce a textual graph: nodes + edges.
    - Identify cycles, chokepoints, and implicit dependencies.
 
-3. **Flow Narratives**
+3. **Upstream / Downstream Analysis** *(required for every non-trivial component)*
+   - **Upstream:** For each component, identify *who calls it* / *what feeds it*.
+     - What inputs arrive? (data shape, timing, protocol)
+     - Who initiates the interaction? (direct call, event, scheduled trigger, IPC)
+     - What assumptions does this component make about its callers?
+   - **Downstream:** For each component, identify *what it calls* / *what it feeds*.
+     - What outputs does it produce and where do they go?
+     - What contracts does it impose on its consumers?
+     - Are there external systems (DB, queue, API, filesystem) downstream?
+   - Scope rule: trace **one hop** in each direction from the target component.
+     Go deeper only if a dependency is non-obvious or undocumented.
+   - Evidence requirement: use `grep`, `rg`, or `cat` to verify call sites — do not infer from naming alone.
+
+4. **Flow Narratives**
    - Provide "happy path" control-flow (high-level).
    - Provide “critical path” (latency/availability sensitive).
    - Provide state transition narrative when state exists.
 
-4. **Coupling Analysis (Non-judgmental)**
+5. **Coupling Analysis (Non-judgmental)**
    - Identify coupling types: data coupling, control coupling, temporal coupling, global state coupling.
    - Report where boundaries are leaky.
 
@@ -77,6 +90,10 @@ You MUST:
 If a codebase exists:
 - First fingerprint the repository (top-level dirs, manifests).
 - Then locate the main entrypoints and primary flows (CLI parsing, command dispatch, IO boundaries).
+- For each identified component, trace **one hop upstream and one hop downstream**:
+  - Upstream: `grep -rn "ComponentName\|module_name\|function_name" --include="*.{ext}"` to find all call sites.
+  - Downstream: read the component's outbound calls, imports, and IO operations.
+  - If a hop leads to an external system (DB, queue, external API), name it explicitly and mark its contract as VERIFIED or UNKNOWN.
 
 If no codebase is available:
 - Work purely from provided specs/docs and label unknowns explicitly.
@@ -107,14 +124,25 @@ Provide a graph-like description, e.g.
 - Critical path (if any)
 - State transitions (if applicable)
 
-### 5) Structural Hotspots (Not prescriptions)
+### 5) Upstream / Downstream Map (Required)
+
+For each significant component, provide a table:
+
+| Component | Upstream Callers | Input Contract | Downstream Targets | Output Contract | External Systems |
+|-----------|-----------------|----------------|-------------------|-----------------|-----------------|
+| [name]    | [who calls it]  | [data shape, timing] | [what it calls] | [data shape, guarantees] | [DB/queue/API/FS] |
+
+- Mark each entry VERIFIED (evidence found) or INFERRED (no direct evidence).
+- Flag any **missing upstream** (component with no known callers — dead code or entry point?) or **missing downstream** (produces output with no known consumer — fire-and-forget or bug?).
+
+### 6) Structural Hotspots (Not prescriptions)
 Identify structural pain points without telling how to fix them:
 - Cycles
 - Too-many-responsibilities modules
 - Ambiguous boundaries
 - Hidden global state
 
-### 6) Evidence Classification
+### 7) Evidence Classification
 - VERIFIED facts (with file/path evidence or grep query)
 - INFERRED claims (why inferred)
 - UNKNOWNs (what evidence would resolve)

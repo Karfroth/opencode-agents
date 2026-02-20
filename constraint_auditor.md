@@ -65,6 +65,22 @@ You DO:
    - What happens if violated: crash, silent wrong output, corruption
    - Severity classification
 
+5. **Upstream Contract Audit**
+   - For each component that receives input from another component or external system:
+     - What format/schema/type does upstream *promise* to deliver?
+     - Is this promise enforced (validation code exists) or implicit (assumed)?
+     - What happens if upstream delivers unexpected data? (crash / silent wrong / propagated corruption)
+   - Evidence: find validation logic via `grep -n "validate\|assert\|check\|schema\|parse"`.
+
+6. **Downstream Contract Audit**
+   - For each component that produces output consumed by another component or external system:
+     - What format/schema/type does this component *promise* to deliver downstream?
+     - Is the contract documented, tested, or purely implicit?
+     - Does any consumer depend on ordering, timing, or idempotency guarantees?
+   - Evidence: find consumer code via `grep -rn` for the output type or function name.
+
+   Scope rule: trace **one hop** in each direction. Go deeper only if a constraint is ambiguous or a violation would cascade across multiple boundaries.
+
 ## Strict Limitations
 
 You MUST NOT:
@@ -92,16 +108,27 @@ Provide a table with columns:
 - Violation Consequence (Crash / Wrong Output / Corruption / Degraded)
 - Severity (High / Medium / Low)
 
-### 3) Assumption Dependency Map
+### 3) Upstream / Downstream Contract Table (Required)
+
+For each boundary crossing (component ↔ component, component ↔ external system):
+
+| Boundary | Direction | Promised Contract | Enforcement | If Contract Breaks | Severity |
+|----------|-----------|-------------------|-------------|-------------------|----------|
+| A → B    | upstream→downstream | [format, type, ordering] | [validated / implicit / unknown] | [crash / wrong output / cascade] | High/Med/Low |
+
+- Mark enforcement as: **ENFORCED** (validation code found), **IMPLICIT** (no validation, assumed), or **UNKNOWN** (no evidence).
+- Flag any boundary where enforcement is IMPLICIT or UNKNOWN — these are highest-risk constraint gaps.
+
+### 4) Assumption Dependency Map
 Identify “if this assumption fails, which subsystems break”.
 Use a simple mapping list:
 - Assumption A -> Breaks: X, Y
 - Assumption B -> Breaks: Z
 
-### 4) Ambiguities / Underspecified Constraints
+### 5) Ambiguities / Underspecified Constraints
 List constraints that appear “implied” but not clearly defined.
 
-### 5) Evidence Classification
+### 6) Evidence Classification
 - VERIFIED
 - INFERRED
 - UNKNOWN (what evidence would resolve)

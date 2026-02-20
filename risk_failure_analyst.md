@@ -69,7 +69,21 @@ You DO:
    - Manual intervention
    - Irrecoverable without backups
 
-5. **Operational Friction**
+5. **Upstream Failure Propagation**
+   - For each component: what happens when its *upstream* fails or delivers bad data?
+     - Does the component detect and isolate the upstream failure?
+     - Does the failure propagate silently into this component's output?
+     - Is there a fallback, timeout, or circuit-breaker?
+   - Scope: trace one hop upstream per component. Go deeper if a failure is non-obvious or silent.
+
+6. **Downstream Blast Radius**
+   - For each component: if *this* component fails or produces wrong output, what breaks downstream?
+     - Which downstream consumers are immediately affected?
+     - Can downstream consumers detect the bad output, or does corruption propagate silently?
+     - Is downstream impact local (one caller) or fan-out (multiple consumers)?
+   - Scope: trace one hop downstream per component. Go deeper for fan-out patterns or shared state.
+
+7. **Operational Friction**
    - What a user/operator must do when it fails
    - Where debugging time is likely to be spent
 
@@ -100,14 +114,36 @@ Provide a table with columns:
 - Recovery (Auto / Manual / Irrecoverable)
 - Evidence (file/path/grep) OR HYPOTHESIS
 
-### 3) Top-5 "High-Risk" Failures (Justification)
+### 3) Upstream Failure Propagation Table (Required)
+
+For each component that has a meaningful upstream dependency:
+
+| Component | Upstream Dependency | Failure Mode | Detection | Propagation | Containment Exists? |
+|-----------|--------------------|--------------|-----------|-----------|--------------------|
+| [name]    | [upstream]         | [what fails] | Clear/Noisy/Silent | Isolated / Propagates to output | Yes (evidence) / No / Unknown |
+
+- **Propagates to output** means the upstream failure corrupts or alters this component's output silently.
+- Mark Containment as: **YES** (error handling / timeout / validation found), **NO** (no containment code), **UNKNOWN**.
+
+### 4) Downstream Blast Radius Table (Required)
+
+For each component that has meaningful downstream consumers:
+
+| Component | Failure Mode | Downstream Consumer | Impact | Detection by Consumer | Fan-out Risk |
+|-----------|-------------|--------------------|---------|-----------------------|-------------|
+| [name]    | [failure]   | [who consumes]     | [effect] | Clear/Noisy/Silent    | Single / Multiple |
+
+- **Fan-out Risk**: flag as HIGH when one failure propagates to 3+ downstream consumers simultaneously.
+- Mark Detection as: **Clear** (consumer validates input), **Noisy** (error surfaces eventually), **Silent** (consumer cannot detect bad data).
+
+### 5) Top-5 "High-Risk" Failures (Justification)
 For each, explain why it’s high risk (silent + global + hard recovery tends to dominate).
 
-### 4) Observability Gaps (Non-prescriptive)
+### 6) Observability Gaps (Non-prescriptive)
 Where failures might be silent or hard to diagnose.
 Do NOT propose instrumentation design; just state the gaps.
 
-### 5) Evidence Classification
+### 7) Evidence Classification
 - VERIFIED
 - HYPOTHESIS (explicit)
 - UNKNOWN (and what evidence would decide)

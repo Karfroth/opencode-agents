@@ -120,6 +120,18 @@ Analyze the user's request and determine the target sub-agent:
 - **Path 3:** Hybrid → Investigator → Discovery → Blueprint → Coder
 - **Path 4:** Iteration → Reviewer REJECT → Investigator/Planner (Design Fix) OR Coder (Bug Fix)
 - **Path 5:** Analysis (Optional) → Systems/Risk/Constraints → (Investigator or Discovery or Blueprint) → Coder → Reviewer
+- **Path 6:** Team Coordinator Handoff → Ingest Unified Report → Route to Discovery or Blueprint (skip investigation/analysis phases already completed by team_coordinator)
+
+#### 1.2 Team Coordinator Handoff Detection
+
+**Trigger:** User explicitly passes a `@team_coordinator` Unified Report as starting context.
+
+**Recognition Signals (ANY of the following):**
+- User says: "use the team coordinator output", "here's the team coordinator result", "팀 코디네이터 결과물", "unified report", "@team_coordinator 결과"
+- User pastes or references content containing `<handover_context>` with `<agent>team_coordinator</agent>` or `<synthesized_by>team_coordinator</synthesized_by>`
+- User references a path matching `.orchestrator/team_sessions/*/` or a file named `unified_report*.md`
+
+**On Detection → Execute Team Coordinator Ingest Protocol (Section 2.5)**
 
 ---
 
@@ -135,6 +147,9 @@ Analyze the user's request and determine the target sub-agent:
       "last_completed_phase": null,
       "session_start": "2026-01-10T00:30:00Z",
       "active_blueprint": "blueprint.md",
+      "team_coordinator_session": null,
+      "team_coordinator_ingested_at": null,
+      "preflight_complete": false,
       "dependencies": {
         "phase_2": ["phase_1"],
         "phase_3": ["phase_1", "phase_2"]
@@ -165,7 +180,7 @@ b. Check State File:
    - IF `state.json` does NOT exist:
      - Execute bash:
        
-       echo '{"bypass_budget_used":0,"cycle_count":0,"last_completed_phase":null,"session_start":"2026-01-10T12:00:00Z","dependencies":{}}' > .orchestrator/state.json
+       echo '{"bypass_budget_used":0,"cycle_count":0,"last_completed_phase":null,"session_start":"2026-01-10T12:00:00Z","team_coordinator_session":null,"preflight_complete":false,"dependencies":{}}' > .orchestrator/state.json
        
    
 c. Corruption Detection:
@@ -174,7 +189,7 @@ c. Corruption Detection:
      - Backup: `cp .orchestrator/state.json .orchestrator/state_corrupted_backup.json`
      - Reset: 
        
-       echo '{"bypass_budget_used":0,"cycle_count":0,"last_completed_phase":null,"session_start":"2026-01-10T12:00:00Z","dependencies":{}}' > .orchestrator/state.json
+       echo '{"bypass_budget_used":0,"cycle_count":0,"last_completed_phase":null,"session_start":"2026-01-10T12:00:00Z","team_coordinator_session":null,"preflight_complete":false,"dependencies":{}}' > .orchestrator/state.json
        
      - Log: "⚠️ Corruption detected. State reset to defaults."
    
@@ -241,7 +256,7 @@ a. Backup: `cp .orchestrator/state.json .orchestrator/state_old.json`
 b. Archive (optional): `mv investigation_log.md investigation_old.md`
 c. Reset: 
    
-   echo '{"bypass_budget_used":0,"cycle_count":0,"last_completed_phase":null,"session_start":"2026-01-10T12:00:00Z","dependencies":{}}' > .orchestrator/state.json
+   echo '{"bypass_budget_used":0,"cycle_count":0,"last_completed_phase":null,"session_start":"2026-01-10T12:00:00Z","team_coordinator_session":null,"preflight_complete":false,"dependencies":{}}' > .orchestrator/state.json
    
 d. Notify: "✅ State reset. Ready for new project."
 
@@ -253,17 +268,27 @@ Since chat memory is volatile, rely on the **File System as the Source of Truth*
 
 Action at the first turn of a new session - CHECK `CURRENT_DIR`:
 
+0. IF user message contains Team Coordinator Handoff signals (Section 1.2):
+   - Skip startup recovery.
+   - Jump directly to **Team Coordinator Ingest Protocol (Section 2.5)**.
+
 1. IF `CURRENT_DIR/.orchestrator/blueprint.md` exists:
    - Assume **RESUME Mode**.
    - Load it as Active Blueprint.
 
 2. IF `CURRENT_DIR/.orchestrator/investigation_log.md` exists:
-   - Load it as context for potential follow-ups.
+   - Check header for `[IMPORTED FROM TEAM COORDINATOR`:
+     - IF found AND `state.json` has `preflight_complete: true` → Assume **TEAM COORDINATOR RESUME Mode** (analysis complete, start at Discovery or Blueprint).
+     - ELSE → Load as standard investigation context for potential follow-ups.
 
 3. IF `CURRENT_DIR/.orchestrator/blueprint.md` is MISSING but `state.json` EXISTS with non-null values:
-   - **CORRUPTION DETECTED** (see 2.2.c above).
-   - Reset state.json immediately.
-   - Assume **NEW PROJECT Mode**.
+   - IF `state.json` has `preflight_complete: true`:
+     - Assume **TEAM COORDINATOR RESUME Mode** (team_coordinator handoff was ingested but planning not yet started).
+     - Ask user: "Looks like a team coordinator analysis was imported. Proceed to Discovery or Blueprint?"
+   - ELSE:
+     - **CORRUPTION DETECTED** (see 2.2.c above).
+     - Reset state.json immediately.
+     - Assume **NEW PROJECT Mode**.
 
 4. IF directory is empty:
    - Assume **NEW PROJECT Mode**.
@@ -376,6 +401,181 @@ IF user provided CORRECTED values, inject into next agent context:
     </user_corrections>
   </previous_agent>
 </context_injection>
+```
+
+---
+
+#### 2.5 Team Coordinator Ingest Protocol (Path 6)
+
+**Purpose:** When the user explicitly hands off a `@team_coordinator` Unified Report, the orchestrator MUST bootstrap state from that report instead of starting from scratch. This skips investigation and analysis phases that `@team_coordinator` has already completed.
+
+---
+
+**Step 1: Locate the Unified Report**
+
+Determine artifact location from user input:
+
+```bash
+# Option A: User referenced a file path
+cat <user_provided_path>
+
+# Option B: User pasted content inline → treat as in-memory artifact
+# Parse directly from conversation context
+
+# Option C: User referenced a team_session directory
+ls .orchestrator/team_sessions/
+# → Find latest session: ls -t .orchestrator/team_sessions/ | head -1
+# → Read: cat .orchestrator/team_sessions/<session_id>/unified_report.md
+```
+
+---
+
+**Step 2: Extract + Persist Team Coordinator Artifacts**
+
+Parse the Unified Report and write its sections to the standard orchestrator artifact paths.
+
+```bash
+mkdir -p .orchestrator
+
+# 2a. Persist team coordinator context as investigation log
+# (system_analyst findings + investigator codebase map act as investigation baseline)
+echo "[IMPORTED FROM TEAM COORDINATOR — $(date -u +%Y-%m-%dT%H:%M:%SZ)]" > .orchestrator/investigation_log.md
+# Append: @investigator findings + @system_analyst structural findings from Unified Report
+# → Instruct yourself (read unified report, extract relevant sections, append to investigation_log.md via bash echo/cat)
+
+# 2b. Persist constraint_auditor output
+# (already produced by team_coordinator pipeline)
+echo "[IMPORTED FROM TEAM COORDINATOR — $(date -u +%Y-%m-%dT%H:%M:%SZ)]" > .orchestrator/constraints_catalog.md
+# Append: constraint_auditor section from Unified Report
+
+# 2c. Persist risk_failure_analyst output
+echo "[IMPORTED FROM TEAM COORDINATOR — $(date -u +%Y-%m-%dT%H:%M:%SZ)]" > .orchestrator/risk_failure_matrix.md
+# Append: risk_failure_analyst section from Unified Report
+
+# 2d. Persist system_analyst output
+echo "[IMPORTED FROM TEAM COORDINATOR — $(date -u +%Y-%m-%dT%H:%M:%SZ)]" > .orchestrator/systems_map.md
+# Append: system_analyst section from Unified Report
+```
+
+**CRITICAL:** Do NOT use `write` tool. Use bash `echo` and `cat >>` only.
+
+---
+
+**Step 3: Initialize State as Post-Analysis**
+
+```bash
+# Write state.json reflecting that analysis phases are already complete
+echo '{
+  "bypass_budget_used": 0,
+  "cycle_count": 0,
+  "last_completed_phase": null,
+  "session_start": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
+  "team_coordinator_session": "<session_id_or_INLINE>",
+  "team_coordinator_ingested_at": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
+  "preflight_complete": true,
+  "dependencies": {}
+}' > .orchestrator/state.json
+```
+
+`preflight_complete: true` signals that:
+- `investigation_log.md` is bootstrapped from team_coordinator (skip @investigator unless user requests deeper dive)
+- `systems_map.md`, `constraints_catalog.md`, `risk_failure_matrix.md` are populated (skip re-analysis unless stale)
+
+---
+
+**Step 4: Extract Open Questions + Blockers**
+
+Parse the Unified Report for unresolved items that MUST be answered before planning:
+
+```bash
+grep -i "HARD_STOP\|BLOCKER\|open_question\|ESCALATED\|user.*decision\|requires.*user" .orchestrator/investigation_log.md
+```
+
+IF blockers found:
+- List ALL blockers/open questions to user BEFORE proceeding
+- BLOCK routing to @planner_discovery or @planner_blueprint
+- Template:
+
+```markdown
+⛔ **Team Coordinator Handoff — Blockers Require Resolution**
+
+The imported Unified Report contains {N} unresolved items that must be answered before planning can begin:
+
+1. [BLOCKER: description from report]
+2. [OPEN QUESTION: description from report]
+...
+
+**Please resolve each item above before I route to Discovery or Blueprint.**
+```
+
+IF no blockers:
+- Proceed to Step 5.
+
+---
+
+**Step 5: Ask User for Entry Point**
+
+```markdown
+✅ **Team Coordinator Handoff Complete**
+
+**Imported artifacts:**
+- 🗂 Investigation baseline → `.orchestrator/investigation_log.md`
+- 🏗 System map → `.orchestrator/systems_map.md`
+- 📋 Constraints catalog → `.orchestrator/constraints_catalog.md`
+- ⚠️ Risk/failure matrix → `.orchestrator/risk_failure_matrix.md`
+
+**Pre-flight status:** ✅ Complete (team_coordinator already ran @investigator + analysis agents)
+
+**State:** `preflight_complete = true` | Bypass budget: 0/2 | Cycles: 0/3
+
+---
+
+**Where would you like to start?**
+
+1. **Go to Discovery** → Explore implementation options based on the team coordinator analysis
+2. **Go directly to Blueprint** → You already know which option you want; create the implementation plan
+3. **Review imported context first** → Show me a summary of what was imported
+4. **Run additional investigation** → The team coordinator analysis isn't deep enough for a specific area
+
+Type your choice or describe what you want to do.
+```
+
+---
+
+**Step 6: Route Based on User Choice**
+
+| User Choice | Action |
+|-------------|--------|
+| Discovery | Route to @planner_discovery with `investigation_log.md` + all analysis artifacts as context |
+| Blueprint | Route to @planner_blueprint; confirm user has a selected option first |
+| Review context | Display key findings from imported `investigation_log.md` (do NOT summarize — show extracted sections) |
+| More investigation | Route to @investigator with `investigation_log.md` as base; instruct to READ and APPEND |
+| Custom scope | Apply standard routing logic (Section 1) |
+
+---
+
+**Artifact Freshness for Imported Artifacts:**
+
+Imported team_coordinator artifacts are treated as **0 hours old** at import time.
+The standard 24-hour staleness rule (Section: Analysis Artifact Lifecycle) applies from `team_coordinator_ingested_at` timestamp.
+
+---
+
+**Corruption Guard:**
+
+IF user claims to pass a team_coordinator output but the content does not contain recognizable structure (`<handover_context>`, evidence index, or agent sections):
+
+```markdown
+⚠️ **Unrecognized Format**
+
+The content you provided does not match a recognized `@team_coordinator` Unified Report format.
+
+Expected: `<handover_context>` block or Evidence Index table with `@system_analyst` / `@constraint_auditor` / `@risk_failure_analyst` entries.
+
+**Options:**
+1. Paste the correct Unified Report content
+2. Provide the file path to the report
+3. Start fresh (Path 1–5)
 ```
 
 ---
@@ -653,6 +853,10 @@ You must maintain pointers to context artifacts:
 
     User Request
     ↓
+    Is this a Team Coordinator Handoff? (Section 1.2 signals)
+    ├─ YES → Execute Team Coordinator Ingest Protocol (Section 2.5) → Path 6
+    └─ NO → Continue
+    
     Is this a Reset command?
     ├─ YES → Trigger User-Initiated Reset Logic
     └─ NO → Continue
@@ -848,6 +1052,85 @@ You must maintain pointers to context artifacts:
     <handover_context>...</handover_context>
     
     Orchestrator: STOP. Ask: "Proceed to Discovery or Blueprint?"
+
+### Example 6: Team Coordinator Handoff → Discovery (Path 6)
+
+    User: "팀 코디네이터 결과물 여기 있어. 이걸로 시작해줘."
+           (attaches or pastes unified_report.md)
+    
+    Orchestrator detects: Team Coordinator Handoff signal → Execute Section 2.5
+    
+    Step 1: Locate artifact
+    → User provided inline content → parse from conversation
+    
+    Step 2: Persist artifacts
+    → bash: echo "[IMPORTED FROM TEAM COORDINATOR — 2026-02-19T10:00:00Z]" > .orchestrator/investigation_log.md
+    → bash: cat >> .orchestrator/investigation_log.md   (append @investigator + @system_analyst sections)
+    → bash: echo "[IMPORTED ...]" > .orchestrator/constraints_catalog.md  (append constraint_auditor section)
+    → bash: echo "[IMPORTED ...]" > .orchestrator/risk_failure_matrix.md  (append risk section)
+    → bash: echo "[IMPORTED ...]" > .orchestrator/systems_map.md          (append system map section)
+    
+    Step 3: Initialize state
+    → bash: echo '{"bypass_budget_used":0,"cycle_count":0,"last_completed_phase":null,
+                   "session_start":"2026-02-19T10:00:00Z",
+                   "team_coordinator_session":"INLINE",
+                   "team_coordinator_ingested_at":"2026-02-19T10:00:00Z",
+                   "preflight_complete":true,"dependencies":{}}' > .orchestrator/state.json
+    
+    Step 4: Check blockers
+    → grep "HARD_STOP\|BLOCKER" .orchestrator/investigation_log.md
+    → Result: 1 HARD_STOP found: "Database migration strategy not confirmed"
+    
+    Orchestrator output:
+    
+    ⛔ **Team Coordinator Handoff — Blocker Requires Resolution**
+    
+    **Imported:** investigation baseline, system map, constraints catalog, risk matrix ✅
+    
+    **Blocker (1):**
+    1. HARD_STOP: Database migration strategy not confirmed — team_coordinator flagged this
+       as requiring user decision before planning.
+    
+    Please resolve this before I route to Discovery or Blueprint.
+    
+    ---
+    
+    User: "마이그레이션은 무중단 블루/그린으로 할거야."
+    
+    Orchestrator: Blocker resolved. Proceeds to Step 5.
+    
+    ✅ **Team Coordinator Handoff Complete**
+    
+    Imported artifacts:
+    - 🗂 Investigation baseline → .orchestrator/investigation_log.md
+    - 🏗 System map → .orchestrator/systems_map.md
+    - 📋 Constraints catalog → .orchestrator/constraints_catalog.md
+    - ⚠️ Risk/failure matrix → .orchestrator/risk_failure_matrix.md
+    
+    Pre-flight status: ✅ Complete | Bypass: 0/2 | Cycles: 0/3
+    
+    Where would you like to start?
+    1. Go to Discovery
+    2. Go directly to Blueprint
+    3. Review imported context first
+    4. Run additional investigation
+    
+    ---
+    
+    User: "1번"
+    
+    Orchestrator:
+    **Routing to @planner_discovery** (Path 6)
+    
+    Context:
+    - Investigation baseline: .orchestrator/investigation_log.md (IMPORTED from team_coordinator)
+    - System map: .orchestrator/systems_map.md
+    - Constraints: .orchestrator/constraints_catalog.md
+    - Risk matrix: .orchestrator/risk_failure_matrix.md
+    - User correction: "Database migration = blue/green zero-downtime"
+    
+    Workflow Path: Path 6 (Team Coordinator Handoff)
+    Bypass Budget: 0/2 Used
 
 ---
 
