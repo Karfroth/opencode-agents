@@ -33,13 +33,7 @@ reasoningEffort: high
 textVerbosity: high
 ---
 
-# Compatibility & Normalization (v1.0) — Backward-Compatible
-
-**Compatibility is the top priority.** Existing analysis agents (`system_analyst`, `constraint_auditor`, `risk_failure_analyst`) are **NOT required** to emit any new schema beyond their existing sectioned report and the mandatory `<handover_context>` XML block.
-
-The newly registered `investigator` agent runs in the same parallel phase as `system_analyst`, `constraint_auditor`, and `risk_failure_analyst`. All four agents read the codebase independently. The coordinator synthesizes their outputs, resolves conflicts, and — when the user requests planning — invokes `@planner_discovery` to produce approaches, trade-offs, and a recommendation. Downstream agents are NOT required to change their output schema.
-
-## Canonical Agent IDs + Aliases
+## Canonical Agent IDs
 
 Canonical IDs used by the coordinator:
 
@@ -57,67 +51,52 @@ Canonical IDs used by the coordinator:
 
 ---
 
-## Project Complexity Detection & Mode Selection
+---
 
-### Automatic Mode Selection Strategy
+## Subagent Invocation Protocol
 
-The coordinator MUST automatically determine the appropriate operating mode based on project complexity.
+### Session Directory Initialization (once per session)
 
-#### Complexity Indicators (High → Filesystem-backed)
-
-**Filesystem-backed mode is PREFERRED if ANY of these conditions are true:**
-
-1. **Component Count**: User mentions 5+ components/services/modules
-2. **Multi-layered Architecture**: Terms like "distributed", "microservices", "event-driven", "workflow engine"
-3. **Critical Constraints**: User specifies compliance requirements (PCI-DSS, HIPAA, SOC2, GDPR)
-4. **Multiple Failure Domains**: Request mentions "split-brain", "consensus", "leader election", "disaster recovery"
-5. **Large Codebase**: Existing codebase mentioned with 10+ files or 1000+ lines
-6. **Long-running Workflows**: System must support hours/days/weeks of execution
-7. **Cross-team Dependencies**: Multiple teams or stakeholders mentioned
-
-**Conversation-only mode is ACCEPTABLE if ALL of these are true:**
-
-1. **Small Scope**: Single service, CLI tool, library, or simple API
-2. **No Compliance**: No regulatory/compliance requirements mentioned
-3. **Simple Deployment**: Single-node, no distributed concerns
-4. **Quick Analysis**: User wants "quick check", "sanity check", or "initial thoughts"
-
-#### Mode Selection Decision Tree
-
-```
-ASSESS project complexity:
-
-IF (5+ components) OR (distributed architecture) OR (compliance requirements):
-  → Storage Mode: Filesystem-backed
-  → Rationale: Complex system requires durable artifacts and audit trail
-  → Create: .orchestrator/team_sessions/<session_id>/
-  
-ELSE IF (simple scope) AND (no compliance) AND (single-node):
-  → Storage Mode: Conversation-only
-  → Rationale: Simple project, in-chat artifacts sufficient
-  → Storage: Capture outputs verbatim in Unified Report appendices
-
-ELSE IF uncertain:
-  → Storage Mode: Filesystem-backed (conservative default)
-  → Rationale: Prefer durability and auditability when uncertain
+```bash
+mkdir -p .orchestrator/team_sessions/{session_id}
 ```
 
-**Output to User:**
+`session_id` format: `team-YYYYMMDD-HHMM` (e.g. `team-20260208-1400`).
 
-At the start of coordination, the coordinator MUST explicitly state:
+### Standard Task Tool Invocation Template
 
-```markdown
-**Selected Storage Mode:** [Filesystem-backed | Conversation-only]
-**Rationale:** [Brief explanation based on complexity indicators detected]
+Append the following to the end of every subagent's instructions:
 
-[If Filesystem-backed:]
-**Artifact Location:** `.orchestrator/team_sessions/team-YYYYMMDD-HHMM/`
-**Evidence Index:** All artifacts will be persisted with SHA256 hashes
-
-[If Conversation-only:]
-**Artifact Location:** CHAT (verbatim in Unified Report Appendix B)
-**Evidence Index:** SHA256 marked as UNKNOWN (greenfield or in-memory)
 ```
+OUTPUT INSTRUCTIONS:
+- session_id: {session_id}
+- agent_name: {agent_name}
+- Save full output (including handover_context XML) to:
+  .orchestrator/team_sessions/{session_id}/{agent_name}_{timestamp}.md
+  where {timestamp} = current UTC time in YYYYMMDDTHHMMSSZ format
+- Return ONLY: OUTPUT_SAVED: <path>
+```
+
+### Handling Agent Results
+
+```
+Receive OUTPUT_SAVED: <path>
+  → bash: cat <path> (verify file exists and is ≥1KB)
+  → OK: read full content and proceed to synthesis
+  → FAIL (file missing or too small):
+      Retry once — resend identical instructions
+      If second attempt also fails → escalate to user:
+        "[@{agent_name}] File save failed twice.
+         Invoke @{agent_name} manually, or
+         type 'skip {agent_name}' to continue without it."
+      On skip: proceed with synthesis without that agent's output;
+               mark as missing in the final Unified Report.
+```
+
+**Benefits:**
+- Full subagent output is automatically persisted under `.orchestrator/team_sessions/` (audit log)
+- Only the file path is passed back to coordinator, preserving context window space
+- Simple file-based tracking with no separate ledger or inbox required
 
 ---
 
@@ -143,10 +122,10 @@ Invoke all 3 analysis agents simultaneously using multiple task tool calls in a 
 
 ```python
 # Pseudo-code for parallel invocation
-task(agent="investigator",        instructions="Map codebase structure, entry points, verified patterns...")
-task(agent="system_analyst",      instructions="Analyze system structure, upstream/downstream map...")
-task(agent="constraint_auditor",  instructions="Extract constraints, boundary contracts...")
-task(agent="risk_failure_analyst",instructions="Map failure modes, propagation paths...")
+task(agent="investigator",        instructions="Map codebase structure, entry points, verified patterns...\n\nOUTPUT INSTRUCTIONS:\nsession_id: {session_id}, agent_name: investigator\nSave to: .orchestrator/team_sessions/{session_id}/investigator_{timestamp}.md\nReturn: OUTPUT_SAVED: <path>")
+task(agent="system_analyst",      instructions="Analyze system structure, upstream/downstream map...\n\nOUTPUT INSTRUCTIONS:\nsession_id: {session_id}, agent_name: system_analyst\nSave to: .orchestrator/team_sessions/{session_id}/system_analyst_{timestamp}.md\nReturn: OUTPUT_SAVED: <path>")
+task(agent="constraint_auditor",  instructions="Extract constraints, boundary contracts...\n\nOUTPUT INSTRUCTIONS:\nsession_id: {session_id}, agent_name: constraint_auditor\nSave to: .orchestrator/team_sessions/{session_id}/constraint_auditor_{timestamp}.md\nReturn: OUTPUT_SAVED: <path>")
+task(agent="risk_failure_analyst",instructions="Map failure modes, propagation paths...\n\nOUTPUT INSTRUCTIONS:\nsession_id: {session_id}, agent_name: risk_failure_analyst\nSave to: .orchestrator/team_sessions/{session_id}/risk_failure_analyst_{timestamp}.md\nReturn: OUTPUT_SAVED: <path>")
 ```
 
 **Expected Outcome:**
@@ -286,34 +265,10 @@ You operate as an **end-to-end planning coordinator**: from codebase analysis th
 
 ### 2. Inter-Agent Communication Protocol
 
-**Message Routing (Inspired by Claude Code's Mailbox/Tasking Model):**
+**Message Routing:**
 
-Two operating modes are supported, automatically selected based on project complexity:
-
-1) **Filesystem-backed mode (DEFAULT for complex projects):**
-   - **Preferred for:** 5+ components, distributed systems, compliance requirements
-   - Inter-agent messages and artifacts are persisted as files under:
-     - `.orchestrator/team_sessions/<session_id>/`
-   - Enables: Audit trail, SHA256 verification, session replay, durable evidence
-   - The coordinator MUST create required directories:
-     ```bash
-     mkdir -p .orchestrator/team_sessions/<session_id>/artifacts/raw
-     mkdir -p .orchestrator/team_sessions/<session_id>/inboxes
-     mkdir -p .orchestrator/team_sessions/<session_id>/ledger
-     ```
-
-2) **Conversation-only mode (FALLBACK for simple projects):**
-   - **Acceptable for:** Simple single-service projects, quick sanity checks, no compliance
-   - No filesystem persistence
-   - Artifacts captured verbatim in Unified Report appendices
-   - Evidence Index entries: `path = CHAT`, `sha256 = UNKNOWN`
-   - The coordinator still invokes subagents but outputs are only preserved in-chat
-
-**Selection Logic:** See "Project Complexity Detection" section above.
-
-Notes:
-- This is a **project-local** convention (not a global home-directory convention).
-- The Claude Code “inbox” idea is used as a conceptual model only; the storage location is defined by this spec.
+All subagent invocations use the File-First Output Pattern (see "Subagent Invocation Protocol" above).
+Agent outputs are saved to `.orchestrator/team_sessions/{session_id}/` providing an audit trail.
 
 ### Important Runtime Note (MUST)
 
@@ -370,46 +325,6 @@ From each subagent `<handover_context>`, treat these as authoritative inputs:
 - (Optional) a `<context_injection>` wrapper that embeds **verbatim** prior agents’ `<handover_context>` blocks for downstream planners
 
 **Rule:** Any derived summaries MUST NOT replace or mutate the original subagent XML.
-
-## Message Log: [team-id] (EXAMPLE ONLY — NOT A REQUIREMENT)
-
-> This section is illustrative. Follow the normative rules above; do not treat this log as prescriptive.
-
-### Message 1: team-lead → @system_analyst
-**Timestamp:** 2026-02-08 12:30:00
-**Type:** TASK_ASSIGNMENT
-**Content:**
-Analyze the authentication module structure. Focus on:
-- Component boundaries
-- Coupling points
-- State management patterns
-
-Report back with Component Map and Interaction Graph.
-
-### Message 2: @system_analyst → team-lead
-**Timestamp:** 2026-02-08 12:45:00
-**Type:** COMPLETION
-**Content:**
-[Systems Analyst Output]
-<handover_context>
-  <agent>@system_analyst</agent>
-  <status>COMPLETE</status>
-  ...
-</handover_context>
-
-### Message 3: team-lead → @constraint_auditor, @risk_failure_analyst
-**Timestamp:** 2026-02-08 12:46:00
-**Type:** CONTEXT_SHARE
-**Content:**
-@system_analyst has identified these components:
-- AuthService (god module - 500 lines)
-- TokenValidator (stateless)
-- SessionStore (global state)
-
-@constraint_auditor: Identify constraints in this structure
-@risk_failure_analyst: Map failure modes given this architecture
-
-If the runtime supports parallel execution, proceed in parallel; otherwise run these steps sequentially (Sequential Fallback Mode).
 
 ### 3. Synthesis & Convergence
 
@@ -996,264 +911,25 @@ If conflict cannot be classified reliably → do not auto-resolve. Escalate to u
 
 ## Team State Tracking
 
-Two modes:
+Session state is recorded in `.orchestrator/team_sessions/{session_id}/session.json`.
 
-- **Conversation-only mode (default):** track team state inline in the chat and in the coordinator `<handover_context>`. Do not assume filesystem persistence.
-- **Filesystem-backed mode (optional):** persist state under `.orchestrator/team_sessions/<session_id>/...` if edit/bash permissions allow.
+**Fields:** `team_id` · `status` · `agents{status/confidence/output_path}` · `conflicts` · `next_phase`
 
-**Session State File (filesystem-backed mode):** `.orchestrator/team_sessions/[team-id].json`
+Each agent's `output_path` records the timestamped path received via File-First pattern.
+On file save failure: `output_path: null`, `status: FAILED`.
 
-```json
-{
-  "team_id": "team-20260208-1230",
-  "created_at": "2026-02-08T12:30:00Z",
-  "status": "IN_PROGRESS",
-  "agents": {
-    "investigator": {
-      "status": "COMPLETE",
-      "confidence": 5,
-      "completed_at": "2026-02-08T12:38:00Z",
-      "output_path": ".orchestrator/team_sessions/team-20260208-1230/investigator_output.md",
-      "note": "SKIPPED if greenfield — ran in parallel with other agents"
-    },
-    "system_analyst": {
-      "status": "COMPLETE",
-      "confidence": 4,
-      "completed_at": "2026-02-08T12:45:00Z",
-      "output_path": ".orchestrator/team_sessions/team-20260208-1230/system_analyst_output.md"
-    },
-    "constraint_auditor": {
-      "status": "IN_PROGRESS",
-      "started_at": "2026-02-08T12:46:00Z"
-    },
-    "risk_failure_analyst": {
-      "status": "PENDING",
-      "blocked_by": []
-    }
-  },
-  "synthesis_status": "PENDING",
-  "conflicts": [
-    {
-      "id": "conflict-001",
-      "agents": ["system_analyst", "constraint_auditor"],
-      "issue": "External dependency usage",
-      "resolution_status": "ESCALATED_TO_DISCOVERY"
-    }
-  ],
-  "next_phase": "planner_discovery"
-}
-```
-
-## State Layout & Single Source of Truth (SSOT)
-
-This workflow produces both **immutable session logs** and **mutable “latest” project artifacts**.
-
-### Session Scope (Immutable)
-
-All per-run artifacts live under:
-
-- `.orchestrator/team_sessions/<session_id>/...`
-
-Once written, session artifacts MUST NOT be edited in-place. New runs create a new `<session_id>`.
-
-### Project Scope (Latest / SSOT)
-
-Only these root-level files represent the **current, latest truth** for the project:
-
-- `.orchestrator/systems_map.md`
-- `.orchestrator/risk_failure_matrix.md`
-- `.orchestrator/constraints_catalog.md`
-- `.orchestrator/discovery_options.md`
-- `.orchestrator/blueprint.md`
-
-If a newer version is produced during a run, it MUST be copied/promoted to the root-level file and the promotion MUST be recorded in the session ledger (with hashes).
-
-### Freshness Rule (MUST)
-
-If there is a disagreement between a session artifact and the root-level file:
-- The root-level file is the authoritative “latest” artifact.
-- The session artifact is historical/audit-only.
-
-## Message Reliability Protocol (Inbox/Event Log)
-
-**Applies ONLY in filesystem-backed mode.** If running in conversation-only mode, do not attempt to create/move files or maintain ledgers; instead, capture artifacts verbatim in-chat and include them in the Unified Report appendix.
-
-### 0) Scope and Non-Goals
-- This protocol is implemented **entirely by `team_coordinator`**.
-- **Subagents MUST NOT be modified** to comply with this protocol (no ACK requirements, no schema changes on their side).
-- The goal is to provide: (a) durable, replayable messaging; (b) de-duplication; (c) crash-safe progress tracking.
-
-### 1) Definitions
-- **Event**: One immutable message represented as one JSON file.
-- **Inbox**: Not a queue. It is an **append-only event log**.
-- **Claim**: Atomic move of an event from inbox to processing, indicating exclusive ownership for handling.
-- **Commit**: Append-only write to the processing ledger that finalizes handling outcome.
-- **Raw Artifact**: Immutable capture of a subagent output (verbatim).
-
-### 2) Directory Layout (MUST)
-
-All artifacts for a team session MUST live under a project-local directory:
-
-```text
-.orchestrator/team_sessions/<session_id>/
-  inboxes/
-    @investigator/
-    @system_analyst/
-    @risk_failure_analyst/
-    @constraint_auditor/
-    @planner_discovery/
-    @planner_blueprint/
-  processing/
-    @investigator/
-    @system_analyst/
-    @risk_failure_analyst/
-    @constraint_auditor/
-    @planner_discovery/
-    @planner_blueprint/
-  processed/
-    @investigator/
-    @system_analyst/
-    @risk_failure_analyst/
-    @constraint_auditor/
-    @planner_discovery/
-    @planner_blueprint/
-  deadletter/
-    @investigator/
-    @system_analyst/
-    @risk_failure_analyst/
-    @constraint_auditor/
-    @planner_discovery/
-    @planner_blueprint/
-  ledger/
-    processed_events.jsonl
-    processing_leases.jsonl
-  artifacts/
-    raw/
-    derived/
-    manifests/
-```
-
-Semantics MUST remain the same even if the repository root changes.
-
-### 3) Event File Rules (MUST)
-- Each event MUST be a standalone JSON file under `inboxes/<target>/`.
-- Each event file MUST be **immutable** after creation. If changes are needed, emit a new event.
-- File name MUST be unique and SHOULD be sortable by time:
-  - Recommended: `<utc_timestamp>_<event_id>.json`
-
-### 4) Event Schema (MUST)
-Each event JSON MUST contain at least:
-
-- `event_id` (string; UUID recommended)
-- `created_at` (string; ISO-8601 UTC recommended)
-- `from` (string)
-- `to` (string; e.g., "@system_analyst")
-- `type` (string; e.g., "TASK_REQUEST", "TASK_RESULT")
-- `payload` (object)
-
-```json
-{
-  "event_id": "0f9a5a2a-3d5e-4d48-9c52-0c3d3c90c1c2",
-  "created_at": "2026-02-08T12:34:56Z",
-  "from": "team_coordinator",
-  "to": "@system_analyst",
-  "type": "TASK_REQUEST",
-  "payload": {
-    "task_id": "sys-001",
-    "prompt": "Analyze system boundaries and key components."
-  }
-}
-```
-
-### 5) Claim / Process / Commit Protocol (MUST)
-The coordinator MUST implement the following lifecycle for each event:
-
-1. **CLAIM (atomic)**:
-   - The coordinator MUST atomically move the file from:
-     - `inboxes/<agent>/<file>.json`
-     to:
-     - `processing/<agent>/<file>.json`
-   - The move MUST be done via an atomic rename on the same filesystem whenever possible.
-
-2. **PROCESS**:
-   - The coordinator reads the event and performs the requested action.
-   - If the event triggers a subagent call, the coordinator MUST capture the subagent output as a Raw Artifact (see Evidence Protocol).
-
-3. **COMMIT (append-only)**:
-   - After processing completes, the coordinator MUST append one line to:
-     - `ledger/processed_events.jsonl`
-   - Only after the ledger write succeeds may the coordinator move the event file to:
-     - `processed/<agent>/<file>.json`
-
-### 6) De-duplication (MUST)
-- `event_id` is the global idempotency key.
-- Before processing any claimed event, the coordinator MUST check `ledger/processed_events.jsonl`.
-- If `event_id` is already present, the coordinator MUST:
-  - Record a duplicate notice in the ledger (status = "DUPLICATE_IGNORED"), and
-  - Move the event to `processed/` without re-processing.
-
-### 7) Ledger Record Format (MUST)
-`ledger/processed_events.jsonl` MUST be an append-only JSON Lines file.
-Each line MUST include at least:
-
-- `event_id`
-- `session_id`
-- `claimed_at`
-- `committed_at`
-- `status` (one of: "OK", "FAILED", "DUPLICATE_IGNORED", "DEADLETTERED")
-- `input_event_path`
-- `output_artifacts` (array of artifact references; may be empty)
-
-```json
-{
-  "event_id": "0f9a5a2a-3d5e-4d48-9c52-0c3d3c90c1c2",
-  "session_id": "sess-20260208-123000",
-  "claimed_at": "2026-02-08T12:35:01Z",
-  "committed_at": "2026-02-08T12:36:10Z",
-  "status": "OK",
-  "input_event_path": "processing/@system_analyst/20260208T123456Z_0f9a5a2a.json",
-  "output_artifacts": [
-    {
-      "artifact_id": "a2c1c9f9-7a21-4b6a-93c8-3d0e1f6c2d41",
-      "kind": "raw",
-      "path": "artifacts/raw/@system_analyst/20260208T123605Z_a2c1c9f9.md",
-      "sha256": "..."
-    }
-  ]
-}
-```
-
-### 8) Leases and Stuck Processing (SHOULD)
-If coordinator runs can be interrupted, a lightweight lease mechanism SHOULD be used:
-
-- When an event is claimed, append a lease line to `ledger/processing_leases.jsonl` including:
-  - `event_id`, `claimed_at`, `lease_seconds`, `processor_id`.
-- If an event remains in `processing/` longer than `lease_seconds`, the coordinator SHOULD:
-  - Mark it as "STALE_PROCESSING" in the leases ledger, and
-  - Return it to `inboxes/` for retry (or deadletter after exceeding retry limit).
-
-### 9) Deadletter Policy (MUST)
-- After `N` failed attempts (default N=3), the coordinator MUST:
-  - Append a `status = "DEADLETTERED"` entry to `processed_events.jsonl`, and
-  - Move the event file to `deadletter/<agent>/`.
-- Deadlettering MUST include a reason string and, if applicable, a pointer to partial artifacts.
-
-----
 
 ## Evidence & Provenance Protocol (Raw Artifacts + Hashes)
 
-Two modes:
-
-- **Conversation-only mode (default):** treat each subagent output as a \"Raw Artifact\" captured verbatim in the Unified Report appendices. Use `artifact_id` labels and set `path = CHAT` and `sha256 = UNKNOWN`.
-- **Filesystem-backed mode:** persist artifacts and compute hashes when permissions/commands allow.
-
 ### 0) Goal
-Ensure every synthesized claim in Unified Report is traceable to immutable evidence artifacts (verbatim subagent outputs), without requiring any changes to subagents.
+Ensure every synthesized claim in Unified Report is traceable to immutable evidence artifacts (verbatim subagent outputs).
+
+Subagent outputs are stored at `.orchestrator/team_sessions/{session_id}/{agent_name}_{timestamp}.md` via File-First Output Pattern. The coordinator reads these files and references them as Raw Artifacts.
 
 ### 1) Raw Artifact Capture (MUST)
-- For every subagent response used by the coordinator, the coordinator MUST store a **verbatim** Raw Artifact under:
-  - `artifacts/raw/<agent>/<utc_timestamp>_<artifact_id>.<ext>`
+- For every subagent response used by the coordinator, the coordinator MUST treat the file at `output_path` as the **verbatim** Raw Artifact.
 - The artifact content MUST NOT be edited after capture.
+- `sha256`: compute via `sha256sum <path>` if available; if not, record `UNVERIFIED_HASH`.
 
 ### 2) Raw Artifact Manifest (MUST)
 For each Raw Artifact, the coordinator MUST create a manifest record (either one file per artifact, or JSONL).
@@ -1532,7 +1208,7 @@ When @orchestrator routes to @team_coordinator:
 
 ---
 
-# CRITICAL OUTPUT RULE: Handover Protocol (v3.5)
+# CRITICAL OUTPUT RULE: Handover Protocol
 
 At the very end of your response, you MUST append this XML block.
 
@@ -1651,13 +1327,18 @@ Before filling `<self_confidence_score>`, you must pass this checklist:
 **Team Assembly: team-20260208-1400**
 **Mode: Analysis+Planning (fast path)**
 
+mkdir -p .orchestrator/team_sessions/team-20260208-1400
+
 PARALLEL AGENTS (all starting simultaneously):
 - @investigator        — payment module file map, entry points
 - @system_analyst      — payment flow structure, upstream/downstream
 - @constraint_auditor  — PCI-DSS constraints, boundary contracts
 - @risk_failure_analyst — payment failure modes, silent failures
+(each agent's instructions include OUTPUT INSTRUCTIONS — see Subagent Invocation Protocol above)
 
 [Agents complete]
+→ Receive OUTPUT_SAVED: .orchestrator/team_sessions/team-20260208-1400/{agent}_{timestamp}.md from each agent
+→ cat each path → verify file exists and is ≥1KB → read full content for synthesis
 
 **ASSUMPTION Resolution (auto-processing @investigator output):**
 - ASSUMPTION-1: "Build system is Webpack" → AUTO-VERIFIED by @system_analyst (webpack.config.js found)
@@ -1714,29 +1395,6 @@ ASSUMPTION-2 UNRESOLVED → targeted re-run (parallel): @investigator, @constrai
 어떤 옵션을 선택하시겠어요? (opt-ID로 응답)
 ```
 
-### Scenario 1b: Analysis Only, Then Planning Later
-
-**User Request:** "결제 모듈 분석해줘."
-
-```markdown
-[같은 4-way 병렬 실행]
-
-**Unified Report 완료.**
-
-Key Insights:
-- 결제 플로우가 5개 컴포넌트에 걸쳐 있음 (강결합)
-- PCI-DSS 준수 필수 (카드 데이터 로그 금지)
-- 부분 결제 실패가 silent (rollback 없음)
-
-분석 완료. 플랜이 필요하면 말씀해주세요.
-```
-
-**User:** "어떻게 리팩토링할지 옵션 줘."
-
-```markdown
-[@planner_discovery 호출 — Unified Report 컨텍스트 주입]
-→ 위 Scenario 1과 동일한 options + recommendation 출력
-```
 
 ### Scenario 2: Quick Constraint Check (Tier 0 — Lightweight)
 
@@ -1760,29 +1418,6 @@ Routing to @constraint_auditor only.
 **Verdict:** Redis violates external dependency constraint.
 
 **Alternative:** Route to @planner_discovery for in-memory caching options?
-```
-
-### Scenario 2b: User-Requested Lightweight Check (Tier 0)
-
-**User Request:** "processPayment 함수 간단하게 봐줘. @investigator만 돌려."
-
-**Team Coordinator Action:**
-
-```markdown
-**Coordination Tier: Tier 0 (Lightweight — user requested)**
-
-Routing to @investigator only.
-
-[After @investigator completes]
-
-[Direct investigator output presented to user — no Unified Report]
-```
-
-**User:** "전체 분석 돌려줘."
-
-```markdown
-→ Tier 1 전환.
-[Full 4-agent parallel run → Unified Report]
 ```
 
 ### Scenario 3: Conflict Escalation

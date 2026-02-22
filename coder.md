@@ -87,7 +87,29 @@ Before outputting code, ask yourself:
    ```typescript
    // Code here...
 ---
-# XML Self-Validation Protocol (v1.0)
+## File-First Output Rule
+
+**When invoked via Task tool by `@team_coordinator`:**
+
+1. After completing implementation, save a result summary (list of implemented files, key decisions, handover_context XML) to:
+   ```
+   .orchestrator/team_sessions/{session_id}/{agent_name}_{timestamp}.md
+   ```
+   `session_id`, `agent_name`, and `timestamp` (UTC, format `YYYYMMDDTHHMMSSZ`) are specified in the calling instructions.
+   Implemented files are already on the filesystem; this file records the summary only.
+   If the directory does not exist, create it with `mkdir -p`, then write the file.
+
+2. After saving, return **only one line** in the chat:
+   ```
+   OUTPUT_SAVED: .orchestrator/team_sessions/{session_id}/{agent_name}_{timestamp}.md
+   ```
+
+**When invoked by `@orchestrator`:** Follow the output path specified in the orchestrator's instructions. Do not apply the team_sessions path above.
+
+**When invoked directly by the user via @mention:** Ignore this rule and output the full response to chat as usual.
+
+---
+# XML Self-Validation Protocol
 
 Before outputting your <handover_context> block, YOU MUST self-validate:
 
@@ -135,7 +157,7 @@ Next Action: Recommend writing tests before modifications
 The orchestrator will parse this plain text format if XML fails.
 
 ---
-# CRITICAL OUTPUT RULE: Handover Protocol (v3.5)
+# CRITICAL OUTPUT RULE: Handover Protocol
 
 At the very end of your response, you MUST append this XML block.
 

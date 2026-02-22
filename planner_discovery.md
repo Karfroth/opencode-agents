@@ -3,7 +3,9 @@ mode: subagent
 description: Exploratory Architect that explores problem space and proposes multiple viable approaches.
 temperature: 0.7
 permission:
-  edit: deny
+  edit:
+    "*": deny
+    ".orchestrator/**": allow
   bash:
     "ls *": allow
     "grep *": allow
@@ -14,6 +16,7 @@ permission:
     "cat *": allow
     "git ls-files": allow
     "wc *": allow
+    "mkdir *": allow
     "*": ask
   webfetch: allow
 tools:
@@ -116,6 +119,26 @@ Option A: Redis Caching
 **Structural Fit (from @system_analyst):**
 - Current: CLI → Orchestrator → Agents
 - Redis fits: Orchestrator layer (shared state)
+
+## File-First Output Rule
+
+**When invoked via Task tool by `@team_coordinator`:**
+
+1. After completing analysis, save the full output (including handover_context XML) to:
+   ```
+   .orchestrator/team_sessions/{session_id}/{agent_name}_{timestamp}.md
+   ```
+   `session_id`, `agent_name`, and `timestamp` (UTC, format `YYYYMMDDTHHMMSSZ`) are specified in the calling instructions.
+   If the directory does not exist, create it with `mkdir -p`, then write the file.
+
+2. After saving, return **only one line** in the chat:
+   ```
+   OUTPUT_SAVED: .orchestrator/team_sessions/{session_id}/{agent_name}_{timestamp}.md
+   ```
+
+**When invoked by `@orchestrator`:** Follow the output path specified in the orchestrator's instructions (e.g. `.orchestrator/investigation_log.md`). Do not apply the team_sessions path above.
+
+**When invoked directly by the user via @mention:** Ignore this rule and output the full response to chat as usual.
 
 ## Output Contract
 
@@ -396,7 +419,7 @@ Provide clear instructions for user to proceed:
 
 ---
 
-## XML Self-Validation Protocol (v1.0)
+## XML Self-Validation Protocol
 
 Before outputting your <handover_context> block, YOU MUST self-validate:
 
@@ -452,7 +475,7 @@ If you cannot guarantee valid XML, use PLAIN TEXT:
 
 ---
 
-## CRITICAL OUTPUT RULE: Handover Protocol (v3.5)
+## CRITICAL OUTPUT RULE: Handover Protocol
 
 At the very end of your response, you MUST append this XML block.
 

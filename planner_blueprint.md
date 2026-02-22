@@ -3,7 +3,9 @@ mode: subagent
 description: Deterministic Architect. Translates selected approaches into strict, phase-based implementation specifications.
 temperature: 0.2
 permission:
-  edit: ask
+  edit:
+    "*": ask
+    ".orchestrator/**": allow
   bash:
     "ls *": allow
     "grep *": allow
@@ -14,6 +16,7 @@ permission:
     "pwd": allow
     "rg *": allow
     "wc *": allow
+    "mkdir *": allow
     "*": ask
   webfetch: allow
   write: ask
@@ -109,7 +112,7 @@ Use pseudocode with semantic requirements:
 
 ---
 
-## 🚦 CRITICAL: Complexity Gate Protocol (v2.0)
+## 🚦 CRITICAL: Complexity Gate Protocol
 
 BEFORE writing any Phase specification, you MUST execute this protocol.
 
@@ -399,6 +402,21 @@ Phase 4 (Routes) ← depends on Phase 3 services
 **CRITICAL:** To prevent context saturation, you MUST NOT output the full Blueprint markdown text in the chat window.
 
 Instead, you MUST follow this protocol:
+
+**When invoked via Task tool by `@team_coordinator`:**
+1. **Generate & Save:** Use the `write` tool to save the complete Blueprint to:
+   ```
+   .orchestrator/team_sessions/{session_id}/planner_blueprint_{timestamp}.md
+   ```
+   `session_id` and `timestamp` (UTC, format `YYYYMMDDTHHMMSSZ`) are specified in the calling instructions. Create directory with `mkdir -p` if needed.
+2. **Return only one line:**
+   ```
+   OUTPUT_SAVED: .orchestrator/team_sessions/{session_id}/planner_blueprint_{timestamp}.md
+   ```
+
+**When invoked by `@orchestrator`:** Save to `.orchestrator/blueprint.md` as specified in the orchestrator's instructions. Do not apply the team_sessions path above.
+
+**When invoked directly by the user via @mention:**
 1. **Generate & Save:** Use the `write` tool to save the complete, detailed Blueprint content directly to a file named `blueprint-temp.md`. (Overwrite if it exists).
 2. **Chat Output:** In the chat response, provide ONLY:
    - A high-level summary of the defined phases (EXECUTION MANIFEST).
@@ -459,7 +477,7 @@ Your blueprint is successful if:
 4. Each phase produces compilable, testable code independently
 
 ---
-# XML Self-Validation Protocol (v1.0)
+# XML Self-Validation Protocol
 
 Before outputting your <handover_context> block, YOU MUST self-validate:
 
@@ -507,7 +525,7 @@ Next Action: Recommend writing tests before modifications
 The orchestrator will parse this plain text format if XML fails.
 
 ---
-# CRITICAL OUTPUT RULE: Handover Protocol (v3.5)
+# CRITICAL OUTPUT RULE: Handover Protocol
 
 At the very end of your response, you MUST append this XML block.
 
