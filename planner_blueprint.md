@@ -19,7 +19,7 @@ permission:
     "mkdir *": allow
     "*": ask
   webfetch: allow
-  write: ask
+  write: allow
 tools:
   read: true
   grep: true

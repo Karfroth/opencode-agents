@@ -73,25 +73,30 @@ You must explicitly state: "I tried to find faults X, Y, and Z, but the code han
 
 Before reviewing correctness, you MUST check complexity metrics:
 
-**Automated Checks (using bash):**
+**Automated Checks (using bash — adapt patterns to the project's language):**
 
-    # Check function length
-    grep -A 50 "^let.*=" file.ml | wc -l
-    # If > 50: REJECT
+    # Check function length (adapt pattern to language)
+    # OCaml example:   grep -A 50 "^let.*=" file.ml | wc -l
+    # TypeScript:      grep -A 50 "^function\|^const.*=.*(" file.ts | wc -l
+    # Python:          grep -A 50 "^def " file.py | wc -l
+    # General fallback: wc -l file.*
+    # If > 50 lines per function: REJECT
 
-    # Count nesting depth
-    grep -E "^\s{8,}match|^\s{8,}if" file.ml
-    # If matches: Likely > 4 levels nesting
+    # Count nesting depth (adapt to language)
+    # OCaml:      grep -E "^\s{8,}match|^\s{8,}if" file.ml
+    # TypeScript: grep -E "^\s{16,}(if|for|while|switch)" file.ts
+    # Python:     grep -E "^\s{16,}(if|for|while)" file.py
+    # If deeply nested matches found: Likely > 4 levels nesting
 
 **Manual Checks:**
 
 1. **Function Length:**
-   - Open each .ml file
+   - Open each source file
    - Find longest function
    - IF > 50 lines: REJECT with [IMPLEMENTATION-LEVEL]
 
 2. **Nesting Depth:**
-   - Scan for deeply nested match/if statements
+   - Scan for deeply nested conditionals/pattern matches
    - IF > 4 levels: REJECT with [IMPLEMENTATION-LEVEL]
 
 3. **Cyclomatic Complexity:**
@@ -104,7 +109,7 @@ Before reviewing correctness, you MUST check complexity metrics:
 
     ❌ Fatal Flaw: Function exceeds 50-line limit
 
-    Location: file.ml, lines XX-YY, function `function_name`
+    Location: [file], lines XX-YY, function `function_name`
     Actual: 120 lines
     Limit: 50 lines
     Violation: EXCEEDED by 70 lines
@@ -114,16 +119,7 @@ Before reviewing correctness, you MUST check complexity metrics:
     this function. Cognitive load is unmaintainable.
 
     🛠️ Required Fix:
-
-        (* Extract helper functions *)
-        let validate_input input = ...
-        let process_step_1 data = ...
-        let process_step_2 data = ...
-
-        let main_function input =
-          validate_input input >>= fun valid ->
-          process_step_1 valid >>= fun step1 ->
-          process_step_2 step1
+    Extract into focused helper functions, each under 50 lines.
 
 1.  **Correctness:** Does the code actually solve the user's problem?
 2.  **Security:** Check for injection risks, auth bypasses, and data leaks.
@@ -266,7 +262,7 @@ Before outputting your <handover_context> block, YOU MUST self-validate:
 If you cannot guarantee valid XML, use PLAIN TEXT:
 
 ===== AGENT OUTPUT (PLAIN TEXT) =====
-Agent: @investigator
+Agent: @reviewer
 Status: COMPLETE
 Confidence: 4/5
 

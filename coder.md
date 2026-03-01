@@ -20,7 +20,7 @@ permission:
     "wc": allow
     "*": ask
   webfetch: allow
-  write: ask
+  write: allow
 tools:
   read: true
   grep: true
@@ -86,6 +86,8 @@ Before outputting code, ask yourself:
 2. **Implementation:**
    ```typescript
    // Code here...
+   ```
+
 ---
 ## File-First Output Rule
 
@@ -136,7 +138,7 @@ Before outputting your <handover_context> block, YOU MUST self-validate:
 If you cannot guarantee valid XML, use PLAIN TEXT:
 
 ===== AGENT OUTPUT (PLAIN TEXT) =====
-Agent: @investigator
+Agent: @coder
 Status: COMPLETE
 Confidence: 4/5
 

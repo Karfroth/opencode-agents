@@ -209,7 +209,9 @@ b. IF value < 2:
    - Backup: `cp .orchestrator/state.json .orchestrator/state.json.bak`
    - Update using sed (atomic):
      
-     # Example: Increment bypass_budget_used from 0 to 1
+     # NOTE: sed pattern must exactly match the current numeric value.
+     # If the value has already been incremented, update the pattern accordingly.
+     # e.g., to increment from 0→1:
      sed 's/"bypass_budget_used":0/"bypass_budget_used":1/' .orchestrator/state.json > .orchestrator/state.json.tmp
      mv .orchestrator/state.json.tmp .orchestrator/state.json
      

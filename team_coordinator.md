@@ -836,6 +836,21 @@ STOP. Wait for user to select an option by ID.
 On user selection:
   → Status: BLUEPRINT_COMPLETE
   → Pass to orchestrator: { selected_option_id, unified_report_path, session_id }
+  → Present to user:
+
+  ```
+  ✅ Option [selected_option_id] selected. Analysis phase complete.
+
+  Next step: Switch to @orchestrator to begin implementation planning.
+
+  Context to hand off to @orchestrator:
+  - Unified Report: {unified_report_path}
+  - Selected option ID: {selected_option_id}
+  - Session ID: {session_id}
+
+  Example: pass the Unified Report path or contents to @orchestrator
+  along with a message such as "Here's the team coordinator output. Start from this."
+  ```
 ```
 
 **Analysis-only mode** (user explicitly says "just analyze", "no planning yet"):

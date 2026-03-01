@@ -24,6 +24,7 @@ tools:
   grep: true
   list: true
   glob: true
+  write: true
 reasoningEffort: high
 textVerbosity: high
 ---
