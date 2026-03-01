@@ -16,7 +16,7 @@ permission:
     "wc *": allow
     "*": ask
   webfetch: allow
-  write: ask
+  write: allow
 tools:
   read: true
   grep: true
@@ -221,6 +221,99 @@ Infer the appropriate document type from the coordinator's instructions or user 
 [CONDITIONAL-FALLBACK — include only if @planner_discovery output was provided.
  If not provided → write: "Alternatives Rejected: Not available (planner_discovery did not run)."]
 ```
+
+---
+
+# Section-by-Section Writing Protocol
+
+**Applies to:** Task tool (File-First) mode only.
+**@mention mode:** This protocol does not apply — session directory is unavailable. Write the full document in a single pass and output to chat as usual.
+
+To prevent quality degradation from context compaction on long documents, sections are written individually as separate files and then merged into the final document.
+
+## Step 1 — Prepare Section Directory
+
+```bash
+mkdir -p .orchestrator/team_sessions/{session_id}/sections
+```
+
+If this directory already exists (revision scenario), reuse it as-is.
+
+## Step 2 — Write Each Section as a Separate File
+
+**First-time write:** Write one section at a time in order. For each section, load only the relevant source agent outputs from the Unified Report — not the entire report — to keep context small.
+
+Each section file must begin with its `##` header as the first line (e.g. `## 2. Background & Motivation`), followed by content. Do not include the document header (title, status, author) in section files — that is prepended at merge time.
+
+**Revision write:** Check which section files already exist. Overwrite only the file(s) targeted by the revision request — leave all other existing section files untouched.
+
+**Special case — CONDITIONAL-OMIT status changes during revision:**
+If a revision adds `@planner_discovery` output where none existed before (s08 was previously omitted):
+- Create `s08-alternatives.md`
+- Rewrite `s09-open-questions.md` and `s10-references.md` with headers `## 9.` and `## 10.` respectively
+If a revision removes `@planner_discovery` output (s08 must now be omitted):
+- Delete `s08-alternatives.md`
+- Rewrite `s09-open-questions.md` and `s10-references.md` with headers `## 8.` and `## 9.` respectively
+
+Save all section files to `.orchestrator/team_sessions/{session_id}/sections/`.
+
+**EDD section files:**
+
+| File | Covers | Primary source | Type |
+|------|--------|---------------|------|
+| `s01-overview.md` | Section 1: Overview | Unified Report summary | Always |
+| `s02-background.md` | Section 2: Background & Motivation | @investigator, @system_analyst | Always |
+| `s03-goals.md` | Section 3: Goals | Unified Report | Always |
+| `s04-non-goals.md` | Section 4: Non-Goals | @constraint_auditor | Always |
+| `s05-design.md` | Section 5: Design (all subsections) | @investigator, @system_analyst, @constraint_auditor | Always |
+| `s06-constraints.md` | Section 6: Constraints & Trade-offs | @constraint_auditor | CONDITIONAL-FALLBACK |
+| `s07-risk.md` | Section 7: Risk Assessment | @risk_failure_analyst | CONDITIONAL-FALLBACK |
+| `s08-alternatives.md` | Section 8: Alternatives Considered | @planner_discovery | CONDITIONAL-OMIT |
+| `s09-open-questions.md` | Section 9: Open Questions | Unified Report (UNRESOLVED items) | Always |
+| `s10-references.md` | Section 10: References | All agent outputs | Always |
+
+**ADR section files:**
+
+| File | Covers | Primary source | Type |
+|------|--------|---------------|------|
+| `adr-s01-context.md` | Context | @investigator, @system_analyst | Always |
+| `adr-s02-decision.md` | Decision | Selected option ID + rationale | Always |
+| `adr-s03-rationale.md` | Rationale | @planner_discovery | Always |
+| `adr-s04-consequences.md` | Consequences (Positive/Negative/Risks) | @planner_discovery, @risk_failure_analyst | Always |
+| `adr-s05-alternatives.md` | Alternatives Rejected | @planner_discovery | CONDITIONAL-FALLBACK |
+
+**CONDITIONAL-OMIT:** skip — do not create the file. If `s08-alternatives.md` is skipped, write `s09-open-questions.md` with header `## 8. Open Questions` and `s10-references.md` with header `## 9. References` — resolve numbering at write time, not merge time.
+**CONDITIONAL-FALLBACK:** always create the file; write fallback text if the source agent did not run.
+
+## Step 2.5 — Pre-Merge Verification
+
+Before merging, verify that all expected "Always" type section files for the current document type exist:
+
+```bash
+ls .orchestrator/team_sessions/{session_id}/sections/
+```
+
+**EDD expected (must all exist):** `s01-overview.md`, `s02-background.md`, `s03-goals.md`, `s04-non-goals.md`, `s05-design.md`, `s06-constraints.md`, `s07-risk.md`, `s09-open-questions.md`, `s10-references.md`. Additionally `s08-alternatives.md` if `@planner_discovery` ran. (Note: filenames are always s09/s10 regardless of whether s08 was omitted — only the headers inside those files differ.)
+**ADR expected (must all exist):** `adr-s01-context.md`, `adr-s02-decision.md`, `adr-s03-rationale.md`, `adr-s04-consequences.md`, `adr-s05-alternatives.md`.
+
+If any expected file is missing → write the missing section(s) before proceeding to Step 3. Do not merge with gaps.
+
+## Step 3 — Merge into Final Document
+
+After all section files are written (or revised), merge them into a single document:
+
+1. Prepend the document header (title, status, author, date, session) before the first section
+2. Concatenate **only the current document type's section files** in order:
+   - **EDD:** `s01`, `s02`, `s03`, `s04`, `s05`, `s06`, `s07`, [`s08`], `s09`, `s10` (skip `s08` if CONDITIONAL-OMIT)
+   - **ADR:** `adr-s01`, `adr-s02`, `adr-s03`, `adr-s04`, `adr-s05`
+   - Use whatever method is appropriate (`cat`, sequential read, etc.)
+3. Apply Self-Correction Checklist to the merged document before saving
+
+## Step 4 — Save and Return
+
+Follow the File-First Output Rule below. Save the merged document as the final output.
+
+Section files in `.orchestrator/team_sessions/{session_id}/sections/` are intermediate artifacts — keep them for auditability but do not include them in the return output.
 
 ---
 
