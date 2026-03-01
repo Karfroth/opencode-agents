@@ -960,8 +960,27 @@ IF technical_writer returned OUTPUT_SAVED + DOCUMENT:
       - status: DOCUMENT_COMPLETE
       - Document: [parsed path from DOCUMENT line]
 
+  **Optional — Document Review (if @reviewer is available):**
+  ```
+  IF @reviewer is available:
+    → Invoke @reviewer in Document Review Mode with:
+        - file: [parsed document path]
+        - mode: document
+        - session_id: {session_id}
+        - timestamp: {timestamp}
+    → Wait for reviewer output
+    IF verdict is REVISE REQUIRED:
+      → Present issues to user with severity classification
+      → Offer to re-invoke @technical_writer with reviewer findings (maximum 1 revision cycle — if issues persist after revision, present to user as known limitations)
+    IF verdict is APPROVE:
+      → Note approval in session_summary.md context
+  ELSE:
+    → Proceed without document review
+  ```
+
   Present to user:
   - Document path
+  - Reviewer verdict (if ran)
   - Any [NEEDS EVIDENCE] gaps noted by technical_writer
   - Confidence score
 
