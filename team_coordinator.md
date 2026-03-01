@@ -44,6 +44,7 @@ Canonical IDs used by the coordinator:
 - `planner_discovery`
 - `planner_blueprint`
 - `technical_writer`
+- `reviewer` *(optional — invoked for document review after @technical_writer completes)*
 
 ## Quorum / Gating (Conservative + Compatible)
 
@@ -54,6 +55,7 @@ Canonical IDs used by the coordinator:
 - `planner_discovery` MUST NOT be invoked until: Unified Report is complete and all HARD_STOP blockers are resolved.
 - `planner_blueprint` MUST NOT be invoked until: user has explicitly selected an option from @planner_discovery output.
 - `technical_writer` MUST NOT be invoked until: (1) Unified Report is complete, and (2) all ASSUMPTIONs are VERIFIED or USER-CONFIRMED. Any UNRESOLVED ASSUMPTION → BLOCK.
+- `reviewer` MUST NOT be invoked until: @technical_writer has completed and returned a document path. Optional — proceeds only if @reviewer is available in the environment.
 
 ---
 
