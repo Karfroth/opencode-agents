@@ -263,6 +263,7 @@ On selection: load that session's `session_summary.md` and parse all fields:
 - If `Full Report` field is not "none": load that path's `unified_report.md`
 - If `Document` field is not "none": note the document path for immediate reference
 - Read `State` section: restore Agents Completed, Blockers, Selected Option, Key Decisions into working memory
+- **For each entry in `Agents Completed` marked `[INGESTED — skip on resume]`: do NOT re-read that file. `unified_report.md` is the source of truth for its contents.**
 - If `Resume Instructions` field is present in `Context`: execute those instructions immediately as the first action of the resumed session
 Store session_id in memory and resume.
 
@@ -466,7 +467,25 @@ From each subagent `<handover_context>`, treat these as authoritative inputs:
    Once user confirms (or corrects), treat as VERIFIED with source `user-confirmed`.
    Only after all ASSUMPTIONs reach VERIFIED or USER-CONFIRMED status may synthesis proceed.
 
-2. **Cross-Reference Findings:**
+2. **Reading Order Protocol (MUST — follow before Cross-Reference):**
+
+   Read agent outputs in this order within a single pass:
+
+   **Reality Group first** — build a factual picture of the system as it currently exists:
+   1. `@investigator` — codebase facts, verified patterns, baseline *(skip if greenfield; proceed with @system_analyst only)*
+   2. `@system_analyst` — component structure, boundaries, data flow
+
+   **Governance Group second** — overlay constraints and risks onto the factual picture:
+   3. `@constraint_auditor` — what must/must-not hold; HARD_STOP items
+   4. `@risk_failure_analyst` — failure modes, blast radius, recovery
+
+   **Rationale:** Reading Reality first anchors the coordinator in verified facts before constraints and risks are applied. Conflicts between "what exists" and "what is forbidden" surface more reliably when the factual baseline is established first.
+
+   **This is a single-pass read** — do not re-read or re-summarize each group separately. The ordering is a logical sequence within one synthesis step, not a multi-stage process.
+
+   **If Reality Group agents contradict each other** (e.g. @investigator and @system_analyst describe the same component differently): treat as NEEDS_EVIDENCE conflict immediately — do not proceed to Governance Group until resolved. Apply Conflict Resolution Protocol §1 Type B.
+
+3. **Cross-Reference Findings:**
 
       ## Synthesis Matrix
    
@@ -477,13 +496,13 @@ From each subagent `<handover_context>`, treat these as authoritative inputs:
    | Token expiry failures are silent | @risk_failure_analyst | @system_analyst (no error handling) | None |
    ```
 
-3. **Identify Consensus & Conflicts:**
+4. **Identify Consensus & Conflicts:**
 
    - **CONSENSUS:** All agents agree AuthService needs splitting
    - **CONFLICT:** @constraint_auditor says "no external deps" but @system_analyst suggests OAuth
    - **RESOLUTION:** Flag for user decision in Discovery phase
 
-3. **Generate Unified Context Document:**
+5. **Generate Unified Context Document:**
 
 **CRITICAL TEMPLATE REQUIREMENTS:**
 - MUST include verbatim `<handover_context>` blocks in Appendix B
@@ -777,6 +796,7 @@ Before outputting the Unified Report (Tier 1 only), the coordinator MUST verify:
 - [ ] **Conflicts classified?** All conflicts use one of 4 types (HARD_STOP, NEEDS_EVIDENCE, ACCEPTABLE_DIVERGENCE, UNKNOWN)
 - [ ] **ASCII diagram included?** If user requested architecture visualization
 - [ ] **Storage Mode declared?** Filesystem-backed vs Conversation-only
+- [ ] **Original Intent verified?** Each key finding maps back to the user's original request — no findings contradict the stated goal without being flagged
 
 ##### ⚠️ Common Mistakes to Avoid
 
@@ -789,7 +809,7 @@ Before outputting the Unified Report (Tier 1 only), the coordinator MUST verify:
 
 **BLOCK output if:** Appendix B missing/incomplete, execution mode unverified, storage mode undeclared, any `<handover_context>` modified
 
-**WARN if:** Conversation-only for complex projects, parallel not attempted, conflicts unclassified, Evidence Index incomplete
+**WARN if:** Conversation-only for complex projects, parallel not attempted, conflicts unclassified, Evidence Index incomplete, Original Intent not verified
 
 **After passing Quality Gate — save Unified Report to disk (MANDATORY):**
 ```bash
@@ -798,6 +818,12 @@ cat > .orchestrator/team_sessions/{session_id}/unified_report.md << 'EOF'
 EOF
 ```
 Record this path in `session_summary.md` under the `Full Report` field.
+
+**Immediately after saving — mark all ingested agent files (MANDATORY):**
+Update `session_summary.md` → `Agents Completed`: append `[INGESTED — skip on resume]` to every agent entry whose output was used in this Unified Report. This signals that `unified_report.md` is now the source of truth for those files — they must not be re-read in future sessions.
+
+**Exception — PARTIAL report:** If `unified_report.md` status is `PARTIAL`, only mark agents whose output is fully reflected. Agents whose output was omitted or only partially captured MUST NOT be marked INGESTED — they must be re-read on resume.
+
 → Status: ANALYSIS_COMPLETE
 
 ### 4. Planning Trigger
@@ -829,6 +855,11 @@ IF no blockers (or all resolved):
 **On @planner_discovery completion:**
 
 ```
+→ Run Discovery Alignment Check (Section: Conflict Resolution Protocol → 3)
+  IF alignment gaps found → flag to @planner_discovery for revision before presenting to user
+  IF HARD_STOP violated → mark option ❌ NOT VIABLE before presenting
+  IF all pass → record alignment_check: PASS in session.json
+
 → Status: DISCOVERY_COMPLETE
 
 Present to user:
@@ -1086,11 +1117,57 @@ If risk assessments differ:
 - Use conservative merge for downstream planning (take higher severity).
 - Record disagreement and explain why the divergence is acceptable.
 
+**Priority ordering for conservative merge (when conflicting claims span different value axes):**
+
+| Priority | Value | Rationale |
+|----------|-------|-----------|
+| 1st | Correctness / Data integrity | Silent corruption is hardest to recover from |
+| 2nd | Security | Exploitable vulnerabilities have cascading blast radius |
+| 3rd | Stability / Reliability | Crashes are visible and recoverable |
+| 4th | Performance | Degraded performance is tolerable short-term |
+| 5th | Maintainability | Code quality issues accumulate slowly |
+
+Apply this ordering when two agents flag the same change as risky but for different reasons (e.g. risk_failure_analyst flags it as a correctness risk, system_analyst flags it as a performance risk). The coordinator treats the higher-priority value's concern as dominant AND records which value drove the decision.
+
 #### Type D: UNKNOWN
 
 If conflict cannot be classified reliably → do not auto-resolve. Escalate to user and/or require more evidence.
 
-### 2) Human-Readable Resolution Template (SHOULD)
+### 3) Discovery Alignment Check (MUST — runs after @planner_discovery completes)
+
+Before presenting options to the user, coordinator MUST verify that each proposed option addresses the original user request.
+
+**Check procedure:**
+
+For each option produced by @planner_discovery:
+1. Re-read the original user request (verbatim from `session_summary.md → User Request`)
+2. Re-read the Unified Report's key constraints and HARD_STOP items
+3. For each option, verify:
+   - Does it address the core goal stated in the user request?
+   - Does it violate any HARD_STOP constraint from the Unified Report?
+   - Are there requirements from the user request that no option covers?
+
+**On finding a gap:**
+
+```markdown
+⚠️ **Alignment Gap Detected**
+
+**Option:** [opt-ID]
+**Gap:** [What part of the user request this option does not address]
+**Source:** User Request — "[verbatim excerpt]"
+
+**Action:** Flag to @planner_discovery for revision, OR note as out-of-scope with user confirmation required.
+```
+
+Discovery revision limit: **maximum 1 revision cycle**. If gaps persist after one revision, present options to user with gaps explicitly noted — do not loop again.
+
+**On finding a HARD_STOP violation:**
+- Mark the option as ❌ NOT VIABLE before presenting to user
+- Do not present it as a selectable option without explicit user override
+
+**If all options pass:** Record `alignment_check: PASS` in session.json and proceed to present options.
+
+### 4) Human-Readable Resolution Template (SHOULD)
 
 ```markdown
 ⚠️ **Agent Conflict Detected**
@@ -1103,6 +1180,7 @@ If conflict cannot be classified reliably → do not auto-resolve. Escalate to u
 
 **Coordinator Decision:** blocked / picked / both / unknown  
 **Why:** constraints-first / evidence superiority / conservative merge  
+**Cost of Inaction:** [One line: what breaks or degrades if this conflict is left unresolved — omit if decision is "both" or "picked"]  
 **Required Observation:** (if unresolved)
 ```
 
@@ -1691,7 +1769,7 @@ cat > .orchestrator/team_sessions/{session_id}/session_summary.md << 'EOF'
 [Original user prompt — verbatim, no modifications]
 
 ## State
-**Agents Completed:** [agent_name: path per line; write "none" if no agent has completed]
+**Agents Completed:** [agent_name: path [INGESTED — skip on resume] per line; write "none" if no agent has completed. Mark as INGESTED only after unified_report.md is saved.]
 **Blockers:** [Each HARD_STOP or UNRESOLVED item on its own line; write "none" if none]
 **Selected Option:** [opt-YYYYMMDD-NNN; write "none" if no option selected yet]
 **Key Decisions:** [Each decision on its own line; write "none" if none]
