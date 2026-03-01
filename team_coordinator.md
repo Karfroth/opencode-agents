@@ -41,6 +41,7 @@ Canonical IDs used by the coordinator:
 - `system_analyst`
 - `constraint_auditor`
 - `risk_failure_analyst`
+- `technical_writer`
 
 ## Quorum / Gating (Conservative + Compatible)
 
@@ -48,6 +49,7 @@ Canonical IDs used by the coordinator:
 - `constraint_auditor` is REQUIRED for `READY_FOR_DISCOVERY` unless the user explicitly waives constraint validation.
 - `system_analyst` is strongly preferred; if missing, coordinator must downgrade confidence and list missing structural evidence.
 - `risk_failure_analyst` may be PARTIAL/MISSING **only with explicit caveat** and user approval when risk coverage is critical.
+- `technical_writer` MUST NOT be invoked until: (1) Unified Report is complete, and (2) all ASSUMPTIONs are VERIFIED or USER-CONFIRMED. Any UNRESOLVED ASSUMPTION → BLOCK.
 
 ---
 
@@ -225,7 +227,17 @@ Check the user's first message:
 ```bash
 find .orchestrator/team_sessions -name "session_summary.md" | sort -r | head -5
 ```
-Parse each result to extract session_id and display:
+If the directory does not exist or no results are returned → display:
+```
+📋 No previous sessions found. Starting a new session.
+```
+Then proceed as a new session.
+
+Otherwise, for each result path (format: `.orchestrator/team_sessions/{session_id}/session_summary.md`), extract `session_id` as the directory name between `team_sessions/` and `/session_summary.md`. Then read each file:
+```bash
+cat .orchestrator/team_sessions/{session_id}/session_summary.md
+```
+Parse `Timestamp`, `User Request`, `Last Action`, and `Status` fields from each file and display (use `Timestamp` field for the date/time shown in brackets):
 ```
 📋 **Previous Sessions** (latest 5)
 
@@ -243,7 +255,7 @@ Parse each result to extract session_id and display:
 
 Enter the number of the session to resume, or the last number to start fresh.
 ```
-On selection: load that session's `session_summary.md` + `unified_report.md`, store session_id in memory, resume.
+On selection: load that session's `session_summary.md`. If `Full Report` field is not "none", also load that path's `unified_report.md`. Store session_id in memory and resume.
 
 **User explicitly requests a new session** (e.g. "start fresh", "new session"):
 → Generate new session_id, create directory, proceed.
@@ -287,6 +299,7 @@ On selection: load that session's `session_summary.md` + `unified_report.md`, st
    | "What risks / constraints exist?" | All 4 analysis agents | Parallel |
    | "Plan / give me approaches for Y" | All 4 parallel → synthesis → **@planner_discovery** | Parallel then Sequential |
    | Analysis only (user says "just analyze") | All 4 analysis agents | Parallel — stop after Unified Report |
+   | "Write a doc / spec / ADR" | Unified Report (required) → **@technical_writer** | Sequential (after analysis) |
 
    **Default when codebase exists:** run all 4 agents (`@investigator`, `@system_analyst`, `@constraint_auditor`, `@risk_failure_analyst`) in parallel.
    **Greenfield:** skip `@investigator`; note gap in Unified Report.
@@ -295,7 +308,7 @@ On selection: load that session's `session_summary.md` + `unified_report.md`, st
 
    ```
    TEAM: [team-id-year-YYYY-month-MM-day-DD-time-HHMM]
-   MODE: [Analysis-only | Analysis+Planning]
+   MODE: [Analysis-only | Analysis+Planning | Analysis+Document | Analysis+Planning+Document]
 
    PARALLEL AGENTS (all start simultaneously):
    - @investigator:        Map codebase — file layout, key entry points, verified patterns
@@ -309,9 +322,12 @@ On selection: load that session's `session_summary.md` + `unified_report.md`, st
    - Coordinator resolves conflicts; escalates HARD_STOP blockers to user
    - IF MODE = Analysis-only: STOP, present Unified Report, offer planning
    - IF MODE = Analysis+Planning: invoke @planner_discovery (Section: Planning Trigger)
+   - IF MODE = Analysis+Document: invoke @technical_writer (Section: Document Writing Trigger)
+   - IF MODE = Analysis+Planning+Document: invoke @planner_discovery → user selects → invoke @technical_writer
 
    DEPENDENCIES:
    - @planner_discovery waits for: Unified Report + all HARD_STOP blockers resolved
+   - @technical_writer waits for: Unified Report + all ASSUMPTIONs resolved
    - @planner_blueprint (orchestrator scope): waits for user option selection
    ```
 
@@ -811,6 +827,54 @@ On user selection:
 → Remain ready: planning trigger still active in this session
 ```
 
+## Document Writing Trigger
+
+After the Unified Report is presented (or upfront if user intent is clear), the coordinator listens for a document writing request.
+
+**Document Writing Trigger Keywords** (ANY of the following):
+- "write a doc", "write a design doc", "design document", "spec", "specification"
+- "ADR", "RFC", "write it up", "document this", "create the doc"
+- User was upfront: request contained document writing intent from the start
+
+**On trigger:**
+
+```
+IF UNRESOLVED ASSUMPTIONs exist in Unified Report:
+  → BLOCK: list unresolved assumptions, require resolution before writing
+
+IF all ASSUMPTIONs resolved:
+  → Invoke @technical_writer with:
+       - Full Unified Report as context (REQUIRED)
+       - @planner_discovery output, if it ran in this session (OPTIONAL — enables "Alternatives Considered" section)
+       - Selected option ID + rationale, if user already selected (OPTIONAL — enables "Decision" section in ADR)
+       - Document type (inferred or user-specified)
+       - Output path (user-specified or default: project root)
+       - Document filename (user-specified or leave blank — technical_writer will derive)
+       - session_id
+
+  Context assembly rule:
+    Unified Report only           → technical_writer produces analysis-based doc (no alternatives section)
+    + planner_discovery output    → technical_writer can populate "Alternatives Considered"
+    + selected option             → technical_writer can populate ADR "Decision" + "Rationale"
+
+  → Status: AWAITING_DOCUMENT
+```
+
+**On @technical_writer completion:**
+
+```
+→ Update session_summary.md status to DOCUMENT_COMPLETE
+
+Present to user:
+  - Document path
+  - Any [NEEDS EVIDENCE] gaps noted by technical_writer
+  - Confidence score
+
+If gaps exist → offer targeted re-run of relevant analysis agents to fill them.
+If @planner_discovery has not run and document type requires alternatives comparison →
+  offer to run @planner_discovery first, then re-invoke @technical_writer.
+```
+
 ## Coordination Patterns
 
 ### Pattern L: Lightweight Analysis (Tier 0 — User-Requested Only)
@@ -871,6 +935,23 @@ Unified Report → @planner_discovery
 
 STEP 3 — User selects option → team coordinator COMPLETE
   → Pass selected option ID to orchestrator (Path 6)
+```
+
+### Pattern D: Document Writing (After Analysis)
+
+**Use Case:** User requests a design doc, spec, or ADR — either upfront or after Unified Report is presented.
+
+```
+Unified Report (REQUIRED — run Pattern 0 first if not yet done)
+  ↓
+IF @planner_discovery ran → include output (enables Alternatives Considered)
+IF user selected option   → include selection + rationale (enables ADR Decision/Rationale)
+  ↓
+@technical_writer
+  → Engineering Design Document | ADR (based on user intent)
+  → [NEEDS EVIDENCE] gaps reported if Unified Report insufficient
+  ↓
+IF gaps exist → offer targeted agent re-run to fill them
 ```
 
 ### Pattern 2: Targeted Follow-up Investigation
@@ -1558,10 +1639,10 @@ cat > .orchestrator/team_sessions/{session_id}/session_summary.md << 'EOF'
  - "CONFLICT detected: system_analyst vs constraint_auditor on external auth deps — awaiting user decision"]
 
 ## Status
-[ANALYSIS_COMPLETE | AWAITING_USER_DECISION | DISCOVERY_COMPLETE | BLUEPRINT_COMPLETE | IN_PROGRESS | BLOCKED]
+[ANALYSIS_COMPLETE | AWAITING_USER_DECISION | DISCOVERY_COMPLETE | BLUEPRINT_COMPLETE | AWAITING_DOCUMENT | DOCUMENT_COMPLETE | IN_PROGRESS | BLOCKED]
 
 ## Full Report
-[Path to unified_report.md — omit if not generated]
+[Path to unified_report.md — write "none" if not generated. Used for session resume.]
 EOF
 ```
 
@@ -1570,7 +1651,7 @@ EOF
 - **User Request**: Verbatim. Do NOT summarize or rephrase
 - **Progress Summary**: 5 lines max. Must be scannable at a glance
 - **Last Action**: 1 line max. Most recent concrete event — what happened last, not what to do next
-- **Status**: Must use exactly one of the 6 values above
+- **Status**: Must use exactly one of the 8 values above
 - **Generation timing**: Update after every response, not just on session end
 - **Overwrite**: Update if status changes within the same session
 
@@ -1582,5 +1663,7 @@ EOF
 | `AWAITING_USER_DECISION` | Waiting for user response (blocker, option selection, etc.) |
 | `DISCOVERY_COMPLETE` | @planner_discovery complete, options presented to user |
 | `BLUEPRINT_COMPLETE` | User selected option, handed off to orchestrator |
+| `AWAITING_DOCUMENT` | @technical_writer invoked, document generation in progress |
+| `DOCUMENT_COMPLETE` | @technical_writer complete, document saved and presented to user |
 | `IN_PROGRESS` | Analysis in progress (interrupted) |
 | `BLOCKED` | HARD_STOP — cannot proceed without user intervention |
