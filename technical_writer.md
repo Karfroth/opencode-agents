@@ -45,7 +45,7 @@ Before producing any content, verify:
 
 - [ ] Unified Report is present and complete
 - [ ] All ASSUMPTIONs in the Unified Report are VERIFIED or USER-CONFIRMED (none UNRESOLVED)
-- [ ] Status is not BLOCKED
+- [ ] Unified Report Status field is not BLOCKED (check `**Status:**` field in the Unified Report header)
 
 If any UNRESOLVED ASSUMPTIONs exist → **STOP**. Return:
 ```
@@ -79,7 +79,9 @@ Infer the appropriate document type from the coordinator's instructions or user 
 | Default (none of above) | Engineering Design Document |
 
 **Supported templates:** Engineering Design Document, ADR.
-**RFC / Runbook / Technical Specification:** No template defined. If detected → notify user and default to Engineering Design Document unless user explicitly confirms the fallback.
+**RFC / Runbook / Technical Specification:** No template defined. If detected:
+- **@mention mode**: notify user and default to Engineering Design Document unless user explicitly confirms the fallback.
+- **Task tool (File-First) mode**: default to Engineering Design Document silently; include a note in the document's Overview section: "Note: Requested document type ([type]) has no defined template — produced as Engineering Design Document."
 
 ---
 
@@ -103,7 +105,9 @@ Infer the appropriate document type from the coordinator's instructions or user 
 
 ## 2. Background & Motivation
 
-[Context from @investigator and @system_analyst findings. What is the current state? What problem are we solving?]
+[Context from @investigator and @system_analyst findings. What is the current state? What problem are we solving?
+ If @investigator did not run (greenfield) → note: "Codebase investigation skipped — greenfield project."
+ If @system_analyst did not run → mark structural claims as `[NEEDS EVIDENCE]`.]
 
 ## 3. Goals
 
@@ -123,15 +127,18 @@ Infer the appropriate document type from the coordinator's instructions or user 
 
 ### 5.2 Component Design
 
-[Per-component breakdown. Each section traces to @investigator or @system_analyst evidence.]
+[Per-component breakdown. Each section traces to @investigator or @system_analyst evidence.
+ If @investigator did not run → mark component details as `[NEEDS EVIDENCE]`.]
 
 ### 5.3 Data Flow
 
-[How data moves through the system. Reference @system_analyst upstream/downstream map.]
+[How data moves through the system. Reference @system_analyst upstream/downstream map.
+ If @system_analyst did not run → mark data flow claims as `[NEEDS EVIDENCE]`.]
 
 ### 5.4 Interface Contracts
 
-[API contracts, boundary definitions from @constraint_auditor.]
+[API contracts, boundary definitions from @constraint_auditor.
+ If @constraint_auditor did not run → mark as `[NEEDS EVIDENCE]`.]
 
 ## 6. Constraints & Trade-offs
 
@@ -149,6 +156,7 @@ Infer the appropriate document type from the coordinator's instructions or user 
 
 [CONDITIONAL-OMIT — include only if @planner_discovery output was provided.
  If not provided, omit this section entirely — do NOT write a fallback note.
+ If omitted, renumber subsequent sections (9→8, 10→9) so there is no numbering gap.
  Content: options from @planner_discovery that were NOT selected, with rejection rationale.]
 
 ## 9. Open Questions
@@ -166,6 +174,8 @@ Infer the appropriate document type from the coordinator's instructions or user 
 
 ```markdown
 # ADR-[N]: [Title]
+[N = sequence number: in File-First mode use the number from the chosen filename (e.g. adr-003 → N=3);
+ in @mention mode scan the current working directory for existing adr-*.md files to determine next N, or use 1 if none exist.]
 
 **Status:** [Proposed | Accepted | Deprecated | Superseded by ADR-N]
 **Date:** [ISO 8601]
@@ -173,7 +183,9 @@ Infer the appropriate document type from the coordinator's instructions or user 
 
 ## Context
 
-[What situation prompted this decision? From @investigator and @system_analyst findings.]
+[What situation prompted this decision? From @investigator and @system_analyst findings.
+ If @investigator did not run (greenfield) → note: "Codebase investigation skipped — greenfield project."
+ If @system_analyst did not run → mark structural context as `[NEEDS EVIDENCE]`.]
 
 ## Decision
 
@@ -190,7 +202,9 @@ Infer the appropriate document type from the coordinator's instructions or user 
 ## Consequences
 
 ### Positive
-[Benefits of this decision. Source: @planner_discovery recommendation or coordinator context.]
+[Benefits of this decision.
+ Source: @planner_discovery recommendation for the selected option.
+ If @planner_discovery did not run → mark as `[NEEDS EVIDENCE]`.]
 
 ### Negative
 [Accepted trade-offs.
@@ -242,11 +256,11 @@ Infer the appropriate document type from the coordinator's instructions or user 
 
 Before finalizing the document, verify:
 
-1. [ ] Every section has content — no empty sections or placeholders (exception: CONDITIONAL sections may be omitted per template rules)
+1. [ ] Every section has content — no empty sections or placeholders (exception: CONDITIONAL-OMIT sections may be absent; CONDITIONAL-FALLBACK sections must have fallback text if agent did not run)
 2. [ ] No `[NEEDS EVIDENCE]` markers remain unless intentional gaps
 3. [ ] All UNRESOLVED assumptions are gone (blocked at input validation)
 4. [ ] Alternatives Considered (EDD): section omitted if @planner_discovery did not run; present if it ran. Alternatives Rejected (ADR): fallback note written if @planner_discovery did not run; content present if it ran
-5. [ ] Risk Assessment section is present if @risk_failure_analyst ran; fallback note written if it did not
+5. [ ] Risk coverage: EDD Section 7 (Risk Assessment) present if @risk_failure_analyst ran; fallback note written if not. ADR Consequences Negative + Risks: content present if @risk_failure_analyst ran; fallback note written if not
 6. [ ] Constraints & Trade-offs section is present if @constraint_auditor ran; fallback note written if it did not
 7. [ ] Document type matches user intent
 8. [ ] No content was invented beyond what the Unified Report contains
@@ -279,6 +293,7 @@ Before finalizing the document, verify:
    OUTPUT_SAVED: .orchestrator/team_sessions/{session_id}/technical_writer_{timestamp}.md
    DOCUMENT: {output_path}/{document_filename}
    ```
+   **Exception — if Input Validation returned BLOCKED:** skip steps 2 and 3 entirely. Return only the BLOCKED message from Input Validation.
 
 **When invoked directly by the user via @mention:** Ignore this rule and output the full document to chat as usual.
 
@@ -296,7 +311,7 @@ Before finalizing the document, verify:
   <key_outputs>
     <o>Document type: [Engineering Design Document | ADR | Engineering Design Document (fallback from RFC/Runbook/Spec)]</o>
     <o>Output path: [path to final document]</o>
-    <o>Sections completed: [N]/[total]</o>
+    <o>Sections completed: [N]/[total — count only sections actually written, excluding CONDITIONAL-OMIT sections that were omitted]</o>
     <o>[Any NEEDS EVIDENCE gaps noted]</o>
   </key_outputs>
 

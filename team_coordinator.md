@@ -41,6 +41,8 @@ Canonical IDs used by the coordinator:
 - `system_analyst`
 - `constraint_auditor`
 - `risk_failure_analyst`
+- `planner_discovery`
+- `planner_blueprint`
 - `technical_writer`
 
 ## Quorum / Gating (Conservative + Compatible)
@@ -49,6 +51,8 @@ Canonical IDs used by the coordinator:
 - `constraint_auditor` is REQUIRED for `READY_FOR_DISCOVERY` unless the user explicitly waives constraint validation.
 - `system_analyst` is strongly preferred; if missing, coordinator must downgrade confidence and list missing structural evidence.
 - `risk_failure_analyst` may be PARTIAL/MISSING **only with explicit caveat** and user approval when risk coverage is critical.
+- `planner_discovery` MUST NOT be invoked until: Unified Report is complete and all HARD_STOP blockers are resolved.
+- `planner_blueprint` MUST NOT be invoked until: user has explicitly selected an option from @planner_discovery output.
 - `technical_writer` MUST NOT be invoked until: (1) Unified Report is complete, and (2) all ASSUMPTIONs are VERIFIED or USER-CONFIRMED. Any UNRESOLVED ASSUMPTION → BLOCK.
 
 ---
@@ -255,7 +259,7 @@ Parse `Timestamp`, `User Request`, `Last Action`, and `Status` fields from each 
 
 Enter the number of the session to resume, or the last number to start fresh.
 ```
-On selection: load that session's `session_summary.md`. If `Full Report` field is not "none", also load that path's `unified_report.md`. Store session_id in memory and resume.
+On selection: load that session's `session_summary.md`. If `Full Report` field is not "none", also load that path's `unified_report.md`. If `Document` field is not "none", note the document path for immediate reference. Store session_id in memory and resume.
 
 **User explicitly requests a new session** (e.g. "start fresh", "new session"):
 → Generate new session_id, create directory, proceed.
@@ -311,6 +315,7 @@ On selection: load that session's `session_summary.md`. If `Full Report` field i
    MODE: [Analysis-only | Analysis+Planning | Analysis+Document | Analysis+Planning+Document]
 
    PARALLEL AGENTS (all start simultaneously):
+   → Status: IN_PROGRESS
    - @investigator:        Map codebase — file layout, key entry points, verified patterns
      [SKIP if greenfield; note in Unified Report]
    - @system_analyst:      Structural decomposition, interaction graph, upstream/downstream map
@@ -443,6 +448,7 @@ From each subagent `<handover_context>`, treat these as authoritative inputs:
    | ALL agents return CANNOT_VERIFY | Escalate to user (one question per assumption): |
 
    ```
+   → Status: AWAITING_USER_DECISION
    ⚠️ Investigator Assumption Could Not Be Verified
 
    ASSUMPTION-N: [statement]
@@ -780,6 +786,15 @@ Before outputting the Unified Report (Tier 1 only), the coordinator MUST verify:
 
 **WARN if:** Conversation-only for complex projects, parallel not attempted, conflicts unclassified, Evidence Index incomplete
 
+**After passing Quality Gate — save Unified Report to disk (MANDATORY):**
+```bash
+cat > .orchestrator/team_sessions/{session_id}/unified_report.md << 'EOF'
+[full Unified Report content]
+EOF
+```
+Record this path in `session_summary.md` under the `Full Report` field.
+→ Status: ANALYSIS_COMPLETE
+
 ### 4. Planning Trigger
 
 After the Unified Report is presented, the coordinator listens for a planning request.
@@ -793,6 +808,7 @@ After the Unified Report is presented, the coordinator listens for a planning re
 
 ```
 IF HARD_STOP blockers exist in Unified Report:
+  → Status: AWAITING_USER_DECISION
   → BLOCK: list blockers, ask user to resolve before planning
 
 IF no blockers (or all resolved):
@@ -808,6 +824,8 @@ IF no blockers (or all resolved):
 **On @planner_discovery completion:**
 
 ```
+→ Status: DISCOVERY_COMPLETE
+
 Present to user:
   - Candidate Approaches (2–3 options with Feasibility + Gate Check)
   - Trade-off Summary
@@ -816,7 +834,7 @@ Present to user:
 STOP. Wait for user to select an option by ID.
 
 On user selection:
-  → Status: COMPLETE
+  → Status: BLUEPRINT_COMPLETE
   → Pass to orchestrator: { selected_option_id, unified_report_path, session_id }
 ```
 
@@ -839,7 +857,12 @@ After the Unified Report is presented (or upfront if user intent is clear), the 
 **On trigger:**
 
 ```
+IF Unified Report does not yet exist:
+  → Run Pattern 0 (Full Parallel Analysis) first
+  → After Unified Report is complete, proceed with document writing trigger
+
 IF UNRESOLVED ASSUMPTIONs exist in Unified Report:
+  → Status: AWAITING_USER_DECISION
   → BLOCK: list unresolved assumptions, require resolution before writing
 
 IF all ASSUMPTIONs resolved:
@@ -852,6 +875,18 @@ IF all ASSUMPTIONs resolved:
        - Document filename (user-specified or leave blank — technical_writer will derive)
        - session_id
 
+  NOTE: technical_writer uses a custom return format. Do NOT use the standard OUTPUT INSTRUCTIONS template.
+  Instead append these OUTPUT INSTRUCTIONS to technical_writer's prompt:
+    session_id: {session_id}
+    output_path: {output_path}
+    agent_name: technical_writer
+    timestamp format: YYYYMMDDTHHMMSSZ (current UTC time)
+    Save full output (including handover_context XML) to:
+      .orchestrator/team_sessions/{session_id}/technical_writer_{timestamp}.md
+    Return ONLY these two lines (replace {document_filename} with the actual filename you chose):
+      OUTPUT_SAVED: .orchestrator/team_sessions/{session_id}/technical_writer_{timestamp}.md
+      DOCUMENT: {output_path}/{document_filename}
+
   Context assembly rule:
     Unified Report only           → technical_writer produces analysis-based doc (no alternatives section)
     + planner_discovery output    → technical_writer can populate "Alternatives Considered"
@@ -863,9 +898,18 @@ IF all ASSUMPTIONs resolved:
 **On @technical_writer completion:**
 
 ```
-→ Update session_summary.md status to DOCUMENT_COMPLETE
+IF technical_writer returned BLOCKED:
+  → Status: BLOCKED
+  → Present the BLOCKED message to user with list of unresolved assumptions
+  → Do NOT update Document field in session_summary.md
 
-Present to user:
+IF technical_writer returned OUTPUT_SAVED + DOCUMENT:
+  → Parse document path: extract the full path after "DOCUMENT: " on the second line
+  → Update session_summary.md:
+      - status: DOCUMENT_COMPLETE
+      - Document: [parsed path from DOCUMENT line]
+
+  Present to user:
   - Document path
   - Any [NEEDS EVIDENCE] gaps noted by technical_writer
   - Confidence score
@@ -1639,19 +1683,26 @@ cat > .orchestrator/team_sessions/{session_id}/session_summary.md << 'EOF'
  - "CONFLICT detected: system_analyst vs constraint_auditor on external auth deps — awaiting user decision"]
 
 ## Status
-[ANALYSIS_COMPLETE | AWAITING_USER_DECISION | DISCOVERY_COMPLETE | BLUEPRINT_COMPLETE | AWAITING_DOCUMENT | DOCUMENT_COMPLETE | IN_PROGRESS | BLOCKED]
+[ANALYSIS_COMPLETE | AWAITING_USER_DECISION | AWAITING_DISCOVERY | DISCOVERY_COMPLETE | BLUEPRINT_COMPLETE | AWAITING_DOCUMENT | DOCUMENT_COMPLETE | IN_PROGRESS | BLOCKED]
 
 ## Full Report
-[Path to unified_report.md — write "none" if not generated. Used for session resume.]
+[Path to unified_report.md — write "none" if not yet generated. Used for session resume.]
+
+## Document
+[Path to generated document — write "none" if @technical_writer has not run. Used for session resume.]
 EOF
 ```
+
+**Field persistence rule**: This template overwrites the entire file on every update. When updating mid-session, always carry forward the current values of `Full Report` and `Document` fields — do NOT reset them to "none" unless explicitly clearing the session.
 
 ### Rules (STRICT)
 
 - **User Request**: Verbatim. Do NOT summarize or rephrase
 - **Progress Summary**: 5 lines max. Must be scannable at a glance
 - **Last Action**: 1 line max. Most recent concrete event — what happened last, not what to do next
-- **Status**: Must use exactly one of the 8 values above
+- **Status**: Must use exactly one of the 9 values above
+- **Full Report**: Absolute or relative path to unified_report.md; write "none" if not yet generated
+- **Document**: Absolute or relative path to generated document; write "none" if @technical_writer has not run
 - **Generation timing**: Update after every response, not just on session end
 - **Overwrite**: Update if status changes within the same session
 
@@ -1661,6 +1712,7 @@ EOF
 |--------|---------|
 | `ANALYSIS_COMPLETE` | Unified Report generated, planning not yet started |
 | `AWAITING_USER_DECISION` | Waiting for user response (blocker, option selection, etc.) |
+| `AWAITING_DISCOVERY` | @planner_discovery invoked, option generation in progress |
 | `DISCOVERY_COMPLETE` | @planner_discovery complete, options presented to user |
 | `BLUEPRINT_COMPLETE` | User selected option, handed off to orchestrator |
 | `AWAITING_DOCUMENT` | @technical_writer invoked, document generation in progress |
