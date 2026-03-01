@@ -259,7 +259,12 @@ Parse `Timestamp`, `User Request`, `Last Action`, and `Status` fields from each 
 
 Enter the number of the session to resume, or the last number to start fresh.
 ```
-On selection: load that session's `session_summary.md`. If `Full Report` field is not "none", also load that path's `unified_report.md`. If `Document` field is not "none", note the document path for immediate reference. Store session_id in memory and resume.
+On selection: load that session's `session_summary.md` and parse all fields:
+- If `Full Report` field is not "none": load that path's `unified_report.md`
+- If `Document` field is not "none": note the document path for immediate reference
+- Read `State` section: restore Agents Completed, Blockers, Selected Option, Key Decisions into working memory
+- If `Resume Instructions` field is present in `Context`: execute those instructions immediately as the first action of the resumed session
+Store session_id in memory and resume.
 
 **User explicitly requests a new session** (e.g. "start fresh", "new session"):
 → Generate new session_id, create directory, proceed.
@@ -1685,10 +1690,18 @@ cat > .orchestrator/team_sessions/{session_id}/session_summary.md << 'EOF'
 ## User Request
 [Original user prompt — verbatim, no modifications]
 
-## Progress Summary
-[What was analyzed, how far it progressed,
- any unresolved blockers in one line,
- next action to resume]
+## State
+**Agents Completed:** [agent_name: path per line; write "none" if no agent has completed]
+**Blockers:** [Each HARD_STOP or UNRESOLVED item on its own line; write "none" if none]
+**Selected Option:** [opt-YYYYMMDD-NNN; write "none" if no option selected yet]
+**Key Decisions:** [Each decision on its own line; write "none" if none]
+
+## Context
+**Discussion:** [One-line summary of the core topic discussed this session — always required]
+**Decision Background:** [Why a decision was made — only when a decision exists]
+**Conflict Log:** [Agent conflicts and how they were resolved — only when conflicts occurred]
+**User Corrections:** [Each CORRECTED: item on its own line — only when corrections were made]
+**Resume Instructions:** [What the resuming agent must do immediately upon reload — only when there is a clear next action or the session was interrupted mid-task]
 
 ## Last Action
 [Single line: the last concrete thing that happened in this session.
@@ -1708,12 +1721,16 @@ cat > .orchestrator/team_sessions/{session_id}/session_summary.md << 'EOF'
 EOF
 ```
 
-**Field persistence rule**: This template overwrites the entire file on every update. When updating mid-session, always carry forward the current values of `Full Report` and `Document` fields — do NOT reset them to "none" unless explicitly clearing the session.
+**Field persistence rule**: This template overwrites the entire file on every update. When updating mid-session, always carry forward the current values of the following fields — do NOT reset them unless explicitly clearing the session:
+- `Full Report` and `Document`
+- All `State` fields: `Agents Completed`, `Blockers`, `Selected Option`, `Key Decisions`
 
 ### Rules (STRICT)
 
 - **User Request**: Verbatim. Do NOT summarize or rephrase
-- **Progress Summary**: 5 lines max. Must be scannable at a glance
+- **State fields**: All four fields always present; write "none" if not applicable
+- **Context — Discussion**: Always required, 1 line
+- **Context — other fields**: Include only when applicable; omit the field entirely if not relevant. When included, 3 lines max per field
 - **Last Action**: 1 line max. Most recent concrete event — what happened last, not what to do next
 - **Status**: Must use exactly one of the 9 values above
 - **Full Report**: Absolute or relative path to unified_report.md; write "none" if not yet generated
