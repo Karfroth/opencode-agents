@@ -1571,7 +1571,7 @@ EOF
 - **Progress Summary**: 5 lines max. Must be scannable at a glance
 - **Last Action**: 1 line max. Most recent concrete event — what happened last, not what to do next
 - **Status**: Must use exactly one of the 6 values above
-- **Generation timing**: Must be generated before session ends for any reason
+- **Generation timing**: Update after every response, not just on session end
 - **Overwrite**: Update if status changes within the same session
 
 ### Status Definitions
